@@ -241,7 +241,7 @@ def refresh_single_account(account):
             log(f"   使用代理: {PROXY_URL}")
             proxy_config = {"server": PROXY_URL}
         
-        # 启动浏览器（带反检测配置）
+        # 启动浏览器
         browser = p.chromium.launch(
             headless=True,
             args=[
@@ -251,7 +251,7 @@ def refresh_single_account(account):
             ]
         )
         
-        # 创建浏览器上下文（模拟真实浏览器）
+        # 创建浏览器上下文
         context = browser.new_context(
             proxy=proxy_config,
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -260,14 +260,21 @@ def refresh_single_account(account):
             timezone_id='America/New_York',
         )
         
-        # 注入脚本隐藏 WebDriver 标志
-        context.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            });
-        """)
-        
         page = context.new_page()
+        
+        # 使用 playwright-stealth 绕过检测
+        try:
+            from playwright_stealth import stealth_sync
+            stealth_sync(page)
+            log("   ✅ stealth 模式已启用")
+        except ImportError:
+            log("   ⚠️ playwright-stealth 未安装，使用基本配置")
+            # 手动隐藏 WebDriver 标志
+            context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+            """)
         
         # 创建截图目录
         os.makedirs("screenshots", exist_ok=True)

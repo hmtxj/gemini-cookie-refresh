@@ -24,7 +24,7 @@ jobs:
       
       - name: 安装依赖
         run: |
-          pip install playwright requests huggingface_hub psycopg2-binary pyyaml
+          pip install playwright requests huggingface_hub psycopg2-binary pyyaml playwright-stealth
           playwright install chromium
       
       # 从 Secret 恢复 Clash 配置并启动代理
