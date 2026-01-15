@@ -170,7 +170,9 @@ def wait_for_verification_code(email, token, timeout=180):
     
     log(f"   等待验证码... (最长 {timeout} 秒)")
     
+    poll_count = 0
     while (time.time() - start_time) < timeout:
+        poll_count += 1
         try:
             resp = requests.get(
                 f"{DUCKMAIL_API}/messages",
@@ -181,6 +183,8 @@ def wait_for_verification_code(email, token, timeout=180):
             )
             if resp.status_code == 200:
                 msgs = resp.json().get('hydra:member', [])
+                if poll_count == 1 or poll_count % 10 == 0:
+                    log(f"   [轮询 {poll_count}] 收到 {len(msgs)} 封邮件")
                 if msgs:
                     msg_id = msgs[0]['id']
                     detail = requests.get(
@@ -191,15 +195,29 @@ def wait_for_verification_code(email, token, timeout=180):
                         verify=False
                     )
                     content = detail.json().get('text') or detail.json().get('html') or ""
+                    subject = detail.json().get('subject', '')
+                    
+                    if poll_count == 1:
+                        log(f"   [邮件标题] {subject[:50]}...")
                     
                     # 提取验证码
                     import re
                     digits = re.findall(r'\b\d{6}\b', content)
                     if digits:
-                        log(f"   找到验证码: {digits[0]}")
+                        log(f"   ✅ 找到验证码: {digits[0]}")
                         return digits[0]
+                    else:
+                        # 尝试其他格式
+                        digits = re.findall(r'(\d{6})', content)
+                        if digits:
+                            log(f"   ✅ 找到验证码: {digits[0]}")
+                            return digits[0]
+            else:
+                if poll_count == 1:
+                    log(f"   [轮询失败] HTTP {resp.status_code}")
         except Exception as e:
-            pass
+            if poll_count == 1:
+                log(f"   [轮询错误] {e}")
         
         time.sleep(3)
     
