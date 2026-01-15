@@ -313,7 +313,18 @@ def refresh_single_account(account):
             email_input.click()
             time.sleep(0.3)
             email_input.clear()
+            time.sleep(0.2)
             email_input.input(email)
+            time.sleep(0.3)
+            # 关键：触发 JavaScript 事件，让页面框架正确绑定邮箱值
+            page.run_js('''
+                let el = document.querySelector("#email-input");
+                if(el) {
+                    el.dispatchEvent(new Event("input", {bubbles: true}));
+                    el.dispatchEvent(new Event("change", {bubbles: true}));
+                    el.dispatchEvent(new Event("blur", {bubbles: true}));
+                }
+            ''')
             time.sleep(0.5)
             page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
             
@@ -379,9 +390,22 @@ def refresh_single_account(account):
         # 输入验证码
         log("   输入验证码...")
         code_input.click()
+        time.sleep(0.2)
         code_input.clear()
         code_input.input(code)
-        time.sleep(0.5)
+        time.sleep(0.3)
+        # 触发 JavaScript 事件
+        try:
+            page.run_js('''
+                let el = document.querySelector("input[name=pinInput]") || document.querySelector("input[type=tel]");
+                if(el) {
+                    el.dispatchEvent(new Event("input", {bubbles: true}));
+                    el.dispatchEvent(new Event("change", {bubbles: true}));
+                }
+            ''')
+        except:
+            pass
+        time.sleep(0.3)
         
         # 点击验证按钮
         buttons = page.eles('css:button')
