@@ -27,6 +27,12 @@ jobs:
           pip install playwright requests huggingface_hub
           playwright install chromium
       
+      - name: 从 Secret 恢复 accounts.json
+        env:
+          ACCOUNTS_JSON: ${{ secrets.ACCOUNTS_JSON }}
+        run: |
+          echo "$ACCOUNTS_JSON" > accounts.json
+      
       - name: 运行刷新脚本
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -34,10 +40,9 @@ jobs:
         run: |
           python refresh_accounts.py --push
       
-      - name: 提交更新
+      - name: 更新 Secret 中的 accounts.json
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add accounts.json
-          git diff --quiet && git diff --staged --quiet || git commit -m "自动刷新账号 Cookie $(date +'%Y-%m-%d %H:%M')"
-          git push
+          # 使用 GitHub CLI 更新 Secret
+          gh secret set ACCOUNTS_JSON < accounts.json
