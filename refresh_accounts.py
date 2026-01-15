@@ -241,9 +241,32 @@ def refresh_single_account(account):
             log(f"   使用代理: {PROXY_URL}")
             proxy_config = {"server": PROXY_URL}
         
-        # 启动浏览器（带代理）
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(proxy=proxy_config) if proxy_config else browser.new_context()
+        # 启动浏览器（带反检测配置）
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                '--disable-blink-features=AutomationControlled',
+                '--disable-dev-shm-usage',
+                '--no-sandbox',
+            ]
+        )
+        
+        # 创建浏览器上下文（模拟真实浏览器）
+        context = browser.new_context(
+            proxy=proxy_config,
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            viewport={'width': 1920, 'height': 1080},
+            locale='en-US',
+            timezone_id='America/New_York',
+        )
+        
+        # 注入脚本隐藏 WebDriver 标志
+        context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+        """)
+        
         page = context.new_page()
         
         # 创建截图目录
