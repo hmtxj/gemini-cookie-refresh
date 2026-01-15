@@ -27,10 +27,10 @@ jobs:
           pip install playwright requests huggingface_hub psycopg2-binary pyyaml
           playwright install chromium
       
-      # 下载并启动代理
+      # 从 Secret 恢复 Clash 配置并启动代理
       - name: 设置代理
         env:
-          SUBSCRIBE_URL: ${{ secrets.SUBSCRIBE_URL }}
+          CLASH_CONFIG: ${{ secrets.CLASH_CONFIG }}
         run: |
           echo "📦 下载 mihomo (Clash Meta)..."
           wget -q https://github.com/MetaCubeX/mihomo/releases/download/v1.18.10/mihomo-linux-amd64-v1.18.10.gz -O mihomo.gz || \
@@ -38,30 +38,23 @@ jobs:
           gunzip mihomo.gz
           chmod +x mihomo
           
-          echo "📥 通过订阅转换获取 Clash 配置..."
-          # 使用订阅转换 API 将 vless 链接转换为 Clash 格式
-          ENCODED_URL=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$SUBSCRIBE_URL', safe=''))")
-          curl -sL "https://api.v1.mk/sub?target=clash&url=${ENCODED_URL}&insert=false" -o config.yaml
-          
-          # 检查配置文件是否有效
-          if ! python3 -c "import yaml; yaml.safe_load(open('config.yaml'))"; then
-            echo "❌ 订阅转换失败，尝试备用 API..."
-            curl -sL "https://sub.xeton.dev/sub?target=clash&url=${ENCODED_URL}" -o config.yaml
-          fi
+          echo "📝 从 Secret 恢复 Clash 配置..."
+          printf '%s' "$CLASH_CONFIG" > local.yaml
           
           echo "📝 修改配置..."
-          python3 update_clash_config.py config.yaml
+          python3 update_clash_config.py local.yaml
           
           echo "🚀 启动代理..."
-          nohup ./mihomo -f config.yaml > clash.log 2>&1 &
+          nohup ./mihomo -f local.yaml > clash.log 2>&1 &
           sleep 5
           
           echo "🔍 验证代理..."
           if curl -s --proxy http://127.0.0.1:7890 --connect-timeout 10 https://www.google.com > /dev/null; then
             echo "✅ 代理可用"
           else
-            echo "⚠️ 代理验证失败，查看日志:"
-            cat clash.log || true
+            echo "❌ 代理不可用，查看日志:"
+            cat clash.log
+            exit 1
           fi
       
       - name: 从 Secret 恢复 accounts.json
