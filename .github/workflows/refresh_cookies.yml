@@ -24,8 +24,49 @@ jobs:
       
       - name: 安装依赖
         run: |
-          pip install playwright requests huggingface_hub psycopg2-binary
+          pip install playwright requests huggingface_hub psycopg2-binary pyyaml
           playwright install chromium
+      
+      # 下载并启动代理
+      - name: 设置代理
+        env:
+          SUBSCRIBE_URL: ${{ secrets.SUBSCRIBE_URL }}
+        run: |
+          echo "📦 下载 Clash..."
+          wget -q https://github.com/Dreamacro/clash/releases/download/v1.18.0/clash-linux-amd64-v1.18.0.gz
+          gunzip clash-linux-amd64-v1.18.0.gz
+          chmod +x clash-linux-amd64-v1.18.0
+          mv clash-linux-amd64-v1.18.0 clash
+          
+          echo "📥 下载订阅配置..."
+          curl -s -o config.yaml "$SUBSCRIBE_URL"
+          
+          # 修改配置：设置端口和模式
+          python3 - <<'EOF'
+import yaml
+with open('config.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+config['mixed-port'] = 7890
+config['allow-lan'] = True
+config['mode'] = 'global'
+config['external-controller'] = '127.0.0.1:9090'
+with open('config.yaml', 'w') as f:
+    yaml.dump(config, f, allow_unicode=True)
+print("✅ 配置已更新")
+EOF
+          
+          echo "🚀 启动 Clash..."
+          nohup ./clash -f config.yaml > clash.log 2>&1 &
+          sleep 5
+          
+          # 验证代理可用
+          if curl -s --proxy http://127.0.0.1:7890 --connect-timeout 10 https://www.google.com > /dev/null; then
+            echo "✅ 代理可用"
+          else
+            echo "❌ 代理不可用，查看日志:"
+            cat clash.log
+            exit 1
+          fi
       
       - name: 从 Secret 恢复 accounts.json
         env:
@@ -39,6 +80,7 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PROXY_URL: http://127.0.0.1:7890
         run: |
           python refresh_accounts.py --force
       

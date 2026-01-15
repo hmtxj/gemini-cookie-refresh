@@ -235,9 +235,15 @@ def refresh_single_account(account):
         return False, None
     
     with sync_playwright() as p:
-        # 启动浏览器
+        # 配置代理
+        proxy_config = None
+        if PROXY_URL:
+            log(f"   使用代理: {PROXY_URL}")
+            proxy_config = {"server": PROXY_URL}
+        
+        # 启动浏览器（带代理）
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
+        context = browser.new_context(proxy=proxy_config) if proxy_config else browser.new_context()
         page = context.new_page()
         
         # 创建截图目录
