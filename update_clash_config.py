@@ -23,18 +23,31 @@ try:
     # 选择一个可用的代理节点
     selected_proxy = None
     if 'proxies' in config and config['proxies']:
-        # 优先选择香港/日本/新加坡节点
-        good_proxies = []
-        for p in config['proxies']:
-            name = p.get('name', '')
-            name_lower = name.lower()
-            if any(k in name_lower for k in ['香港', 'hk', 'hong', '日本', 'jp', 'japan', '新加坡', 'sg', 'singapore']):
-                good_proxies.append(name)
+        all_names = [p.get('name', '') for p in config['proxies']]
         
-        if good_proxies:
-            selected_proxy = random.choice(good_proxies)
-        else:
-            # 没有好节点就选第一个
+        # 优先选择已知可用的节点
+        preferred_nodes = [
+            '日本专线02|BGP|流媒体',
+            '香港专线03|BGP|流媒体',
+            '日本专线01|BGP|流媒体',
+        ]
+        
+        for node in preferred_nodes:
+            if node in all_names:
+                selected_proxy = node
+                break
+        
+        # 如果没找到优选节点，选择任意香港/日本节点
+        if not selected_proxy:
+            for p in config['proxies']:
+                name = p.get('name', '')
+                name_lower = name.lower()
+                if any(k in name_lower for k in ['香港', 'hk', 'hong', '日本', 'jp', 'japan']):
+                    selected_proxy = name
+                    break
+        
+        # 还是没有就选第一个
+        if not selected_proxy:
             selected_proxy = config['proxies'][0]['name']
         
         print(f"✅ 选择代理节点: {selected_proxy}")
