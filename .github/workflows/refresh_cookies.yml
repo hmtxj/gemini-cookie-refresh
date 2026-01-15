@@ -22,6 +22,11 @@ jobs:
         with:
           python-version: '3.11'
       
+      - name: 安装 Chrome 和 Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+      
       - name: 安装 Chrome
         uses: browser-actions/setup-chrome@v1
         with:
@@ -31,7 +36,7 @@ jobs:
         run: |
           pip install DrissionPage requests huggingface_hub psycopg2-binary pyyaml
           # 验证 Chrome 安装
-          google-chrome --version || chromium-browser --version || echo "Chrome not found in PATH"
+          google-chrome --version || echo "Chrome not found"
       
       # 从 Secret 恢复 Clash 配置并启动代理
       - name: 设置代理
@@ -76,7 +81,14 @@ jobs:
           HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           PROXY_URL: http://127.0.0.1:7890
+          DISPLAY: ":99"
         run: |
+          # 启动虚拟显示器
+          echo "🖥️ 启动 Xvfb 虚拟显示器..."
+          Xvfb :99 -screen 0 1920x1080x24 &
+          sleep 2
+          
+          # 运行脚本
           python refresh_accounts.py --force
       
       - name: 上传调试截图

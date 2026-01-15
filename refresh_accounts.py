@@ -237,7 +237,8 @@ def refresh_single_account(account):
     
     # 配置浏览器
     co = ChromiumOptions()
-    co.set_argument('--headless=new')  # 无头模式
+    # 不使用 headless 模式，让 Xvfb 虚拟显示器运行真实 GUI
+    # co.set_argument('--headless=new')
     co.set_argument('--incognito')
     if PROXY_URL:
         log(f"   使用代理: {PROXY_URL}")
