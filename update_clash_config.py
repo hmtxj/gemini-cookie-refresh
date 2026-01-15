@@ -13,8 +13,12 @@ try:
     
     config['mixed-port'] = 7890
     config['allow-lan'] = True
-    config['mode'] = 'rule'  # 使用规则模式
+    config['mode'] = 'global'  # 全局模式，所有流量走代理
     config['external-controller'] = '127.0.0.1:9090'
+    
+    # 确保规则不会直连 - 直接删除 rules，让 global 模式生效
+    if 'rules' in config:
+        del config['rules']
     
     # 尝试选择一个可用的代理节点
     if 'proxies' in config and config['proxies']:
