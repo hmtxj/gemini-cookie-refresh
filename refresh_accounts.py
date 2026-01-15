@@ -240,11 +240,16 @@ def refresh_single_account(account):
         context = browser.new_context()
         page = context.new_page()
         
+        # 创建截图目录
+        os.makedirs("screenshots", exist_ok=True)
+        account_id = email.split("@")[0][:10]
+        
         try:
             # 访问 Gemini Business
             log("   打开 Gemini Business...")
             page.goto("https://business.gemini.google/", timeout=30000)
             page.wait_for_timeout(3000)
+            page.screenshot(path=f"screenshots/{account_id}_01_landing.png")
             
             # 输入邮箱
             log("   输入邮箱...")
@@ -253,12 +258,14 @@ def refresh_single_account(account):
                 page.locator('input[type="text"]'))
             email_input.fill(email)
             page.wait_for_timeout(500)
+            page.screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
             
             # 点击继续
             continue_btn = page.locator('button:has-text("使用邮箱继续")').or_(
                 page.locator('button').first)
             continue_btn.click()
             page.wait_for_timeout(3000)
+            page.screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
             # 等待验证码输入框
             log("   等待验证码输入框...")
