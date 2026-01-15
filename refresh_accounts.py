@@ -245,33 +245,57 @@ def refresh_single_account(account):
         account_id = email.split("@")[0][:10]
         
         try:
-            # 访问 Gemini Business
-            log("   打开 Gemini Business...")
-            page.goto("https://business.gemini.google/", timeout=30000)
-            page.wait_for_timeout(3000)
-            page.screenshot(path=f"screenshots/{account_id}_01_landing.png")
-            
-            # 输入邮箱
-            log("   输入邮箱...")
-            email_input = page.locator('#email-input').or_(
-                page.locator('input[name="loginHint"]')).or_(
-                page.locator('input[type="text"]'))
-            email_input.fill(email)
-            page.wait_for_timeout(500)
-            page.screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
-            
-            # 点击继续
-            continue_btn = page.locator('button:has-text("使用邮箱继续")').or_(
-                page.locator('button').first)
-            continue_btn.click()
-            page.wait_for_timeout(3000)
-            page.screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
-            
-            # 等待验证码输入框
-            log("   等待验证码输入框...")
-            code_input = page.locator('input[name="pinInput"]').or_(
-                page.locator('input[type="tel"]'))
-            code_input.wait_for(state="visible", timeout=30000)
+            max_retries = 3
+            for attempt in range(max_retries):
+                # 访问 Gemini Business
+                log(f"   打开 Gemini Business... (尝试 {attempt + 1}/{max_retries})")
+                page.goto("https://business.gemini.google/", timeout=30000)
+                page.wait_for_timeout(3000)
+                page.screenshot(path=f"screenshots/{account_id}_01_landing.png")
+                
+                # 输入邮箱
+                log("   输入邮箱...")
+                email_input = page.locator('#email-input').or_(
+                    page.locator('input[name="loginHint"]')).or_(
+                    page.locator('input[type="text"]'))
+                email_input.fill(email)
+                page.wait_for_timeout(500)
+                page.screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
+                
+                # 点击继续
+                continue_btn = page.locator('button:has-text("使用邮箱继续")').or_(
+                    page.locator('button:has-text("Continue with email")').or_(
+                    page.locator('button').first))
+                continue_btn.click()
+                page.wait_for_timeout(3000)
+                page.screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
+                
+                # 检查是否遇到错误页面
+                error_text = page.locator('text=请试试其他方法').or_(
+                    page.locator('text=Let\'s try something else'))
+                if error_text.count() > 0:
+                    log(f"   ⚠️ 遇到服务器错误，重试...")
+                    # 点击"注册或登录"按钮重试
+                    retry_btn = page.locator('button:has-text("注册或登录")').or_(
+                        page.locator('button:has-text("Sign up or sign in")'))
+                    if retry_btn.count() > 0:
+                        retry_btn.click()
+                        page.wait_for_timeout(2000)
+                    continue  # 重试
+                
+                # 等待验证码输入框
+                log("   等待验证码输入框...")
+                code_input = page.locator('input[name="pinInput"]').or_(
+                    page.locator('input[type="tel"]'))
+                try:
+                    code_input.wait_for(state="visible", timeout=30000)
+                    break  # 成功找到验证码输入框，退出重试循环
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        log(f"   ⚠️ 验证码输入框未出现，重试...")
+                        continue
+                    else:
+                        raise e  # 最后一次尝试也失败，抛出异常
             
             # 从 DuckMail 获取验证码
             code = wait_for_verification_code(email, token)
