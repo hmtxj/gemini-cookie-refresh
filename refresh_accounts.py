@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 
 # 配置
 ACCOUNTS_FILE = "accounts.json"
-DUCKMAIL_API = "https://api.mail.tm"
+DUCKMAIL_API = "https://api.duckmail.sbs"
 
 # 可选：代理配置（GitHub Actions 上可能需要）
 PROXY_URL = os.environ.get("PROXY_URL", None)
