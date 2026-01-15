@@ -75,7 +75,7 @@ jobs:
           curl -s https://api.ipify.org && echo ""
           
           echo ""
-          echo "📍 通过代理的 IP (应该是香港节点):"
+          echo "📍 通过代理的 IP (代理节点):"
           curl -s --proxy http://127.0.0.1:7890 --connect-timeout 15 https://api.ipify.org && echo "" || echo "代理连接失败"
           
           echo ""
