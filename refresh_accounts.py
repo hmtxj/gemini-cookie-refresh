@@ -98,6 +98,15 @@ def load_accounts():
     if is_database_enabled():
         accounts = db_load_accounts()
         if accounts is not None:
+            # 如果数据库是空的，尝试从文件加载并初始化数据库
+            if len(accounts) == 0 and os.path.exists(ACCOUNTS_FILE):
+                log("📦 数据库为空，从文件初始化...")
+                with open(ACCOUNTS_FILE, 'r', encoding='utf-8') as f:
+                    file_accounts = json.load(f)
+                if file_accounts:
+                    log(f"📦 从文件加载了 {len(file_accounts)} 个账号，写入数据库...")
+                    db_save_accounts(file_accounts)
+                    return file_accounts
             log(f"📦 从数据库加载了 {len(accounts)} 个账号")
             return accounts
     # 文件模式
