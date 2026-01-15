@@ -38,8 +38,16 @@ jobs:
           gunzip mihomo.gz
           chmod +x mihomo
           
-          echo "📥 下载订阅配置..."
-          curl -sL -o config.yaml "$SUBSCRIBE_URL"
+          echo "📥 通过订阅转换获取 Clash 配置..."
+          # 使用订阅转换 API 将 vless 链接转换为 Clash 格式
+          ENCODED_URL=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$SUBSCRIBE_URL', safe=''))")
+          curl -sL "https://api.v1.mk/sub?target=clash&url=${ENCODED_URL}&insert=false" -o config.yaml
+          
+          # 检查配置文件是否有效
+          if ! python3 -c "import yaml; yaml.safe_load(open('config.yaml'))"; then
+            echo "❌ 订阅转换失败，尝试备用 API..."
+            curl -sL "https://sub.xeton.dev/sub?target=clash&url=${ENCODED_URL}" -o config.yaml
+          fi
           
           echo "📝 修改配置..."
           python3 update_clash_config.py config.yaml
@@ -52,7 +60,7 @@ jobs:
           if curl -s --proxy http://127.0.0.1:7890 --connect-timeout 10 https://www.google.com > /dev/null; then
             echo "✅ 代理可用"
           else
-            echo "⚠️ 代理验证失败，继续运行（可能是网络问题）"
+            echo "⚠️ 代理验证失败，查看日志:"
             cat clash.log || true
           fi
       
