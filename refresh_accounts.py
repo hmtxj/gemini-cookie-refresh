@@ -194,24 +194,41 @@ def wait_for_verification_code(email, token, timeout=180):
                         timeout=10,
                         verify=False
                     )
-                    content = detail.json().get('text') or detail.json().get('html') or ""
-                    subject = detail.json().get('subject', '')
+                    data = detail.json()
+                    content = data.get('text') or data.get('html') or ""
+                    subject = data.get('subject', '')
                     
                     if poll_count == 1:
                         log(f"   [邮件标题] {subject[:50]}...")
+                        log(f"   [邮件内容长度] {len(content)} 字符")
+                        # 打印邮件内容的前 200 个字符用于调试
+                        if content:
+                            log(f"   [邮件内容前200字符] {content[:200]}...")
                     
-                    # 提取验证码
+                    # 提取验证码 - 多种方式尝试
                     import re
+                    
+                    # 方式1: 严格匹配6位数字
                     digits = re.findall(r'\b\d{6}\b', content)
                     if digits:
                         log(f"   ✅ 找到验证码: {digits[0]}")
                         return digits[0]
-                    else:
-                        # 尝试其他格式
-                        digits = re.findall(r'(\d{6})', content)
-                        if digits:
-                            log(f"   ✅ 找到验证码: {digits[0]}")
-                            return digits[0]
+                    
+                    # 方式2: 匹配任意6位连续数字
+                    digits = re.findall(r'(\d{6})', content)
+                    if digits:
+                        log(f"   ✅ 找到验证码: {digits[0]}")
+                        return digits[0]
+                    
+                    # 方式3: 从标题中提取
+                    digits = re.findall(r'(\d{6})', subject)
+                    if digits:
+                        log(f"   ✅ 从标题找到验证码: {digits[0]}")
+                        return digits[0]
+                    
+                    # 如果是第一次轮询且没找到，打印警告
+                    if poll_count == 1:
+                        log(f"   [警告] 邮件中未找到6位验证码")
             else:
                 if poll_count == 1:
                     log(f"   [轮询失败] HTTP {resp.status_code}")
