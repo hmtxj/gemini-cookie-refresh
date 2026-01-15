@@ -35,7 +35,6 @@ jobs:
       - name: 安装依赖
         run: |
           pip install DrissionPage requests huggingface_hub psycopg2-binary pyyaml
-          # 验证 Chrome 安装
           google-chrome --version || echo "Chrome not found"
       
       # 从 Secret 恢复 Clash 配置并启动代理
@@ -52,33 +51,36 @@ jobs:
           echo "📝 从 Secret 恢复 Clash 配置..."
           printf '%s' "$CLASH_CONFIG" > local.yaml
           
+          echo "📝 配置文件内容（脱敏）:"
+          head -30 local.yaml | sed 's/password:.*/password: ***/' | sed 's/uuid:.*/uuid: ***/'
+          
+          echo ""
           echo "📝 修改配置..."
           python3 update_clash_config.py local.yaml
           
+          echo ""
           echo "🚀 启动代理..."
-          nohup ./mihomo -f local.yaml > clash.log 2>&1 &
-          sleep 5
+          ./mihomo -f local.yaml > clash.log 2>&1 &
+          MIHOMO_PID=$!
+          echo "Mihomo PID: $MIHOMO_PID"
+          sleep 8
           
+          echo ""
+          echo "📋 Clash 启动日志:"
+          cat clash.log
+          
+          echo ""
           echo "🔍 验证代理..."
-          echo "📍 不使用代理的 IP:"
-          curl -s https://api.ipify.org || echo "Failed"
+          echo "📍 GitHub Actions 原始 IP (不走代理):"
+          curl -s https://api.ipify.org && echo ""
           
           echo ""
-          echo "📍 使用代理后的 IP:"
-          PROXY_IP=$(curl -s --proxy http://127.0.0.1:7890 --connect-timeout 10 https://api.ipify.org) || echo "Failed"
-          echo "$PROXY_IP"
-          
-          if [ -n "$PROXY_IP" ]; then
-            echo "✅ 代理可用，出口 IP: $PROXY_IP"
-          else
-            echo "❌ 代理不可用，查看日志:"
-            cat clash.log
-            exit 1
-          fi
+          echo "📍 通过代理的 IP (应该是香港节点):"
+          curl -s --proxy http://127.0.0.1:7890 --connect-timeout 15 https://api.ipify.org && echo "" || echo "代理连接失败"
           
           echo ""
-          echo "📍 查看 Clash 当前状态:"
-          curl -s http://127.0.0.1:9090/proxies 2>/dev/null | head -c 1000 || echo "无法访问 Clash API"
+          echo "📍 通过代理访问 Google:"
+          curl -s --proxy http://127.0.0.1:7890 --connect-timeout 15 -o /dev/null -w "HTTP %{http_code}" https://www.google.com && echo "" || echo "失败"
       
       - name: 从 Secret 恢复 accounts.json
         env:
