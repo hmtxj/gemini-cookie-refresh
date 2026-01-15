@@ -1,0 +1,32 @@
+name: 同步账号到数据库
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: 安装依赖
+        run: pip install psycopg2-binary
+      
+      - name: 从 Secret 恢复 accounts.json
+        env:
+          ACCOUNTS_JSON: ${{ secrets.ACCOUNTS_JSON }}
+        run: |
+          printf '%s' "$ACCOUNTS_JSON" > accounts.json
+          echo "账号数量: $(grep -o '"id"' accounts.json | wc -l)"
+      
+      - name: 同步到数据库
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python sync_to_db.py
