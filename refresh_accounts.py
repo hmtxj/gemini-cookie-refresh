@@ -281,6 +281,13 @@ def refresh_single_account(account):
                     page.locator('text=Let\'s try something else'))
                 if error_text.count() > 0:
                     log(f"   ⚠️ 遇到服务器错误，重试...")
+                    page.screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
+                    
+                    # 最后一次尝试也失败，退出
+                    if attempt >= max_retries - 1:
+                        log(f"   ❌ 重试 {max_retries} 次仍失败，跳过此账号")
+                        return False, None
+                    
                     # 点击"注册或登录"按钮重试
                     retry_btn = page.locator('button:has-text("注册或登录")').or_(
                         page.locator('button:has-text("Sign up or sign in")'))
