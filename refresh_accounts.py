@@ -225,201 +225,204 @@ def refresh_single_account(account):
     if not token:
         return False, None
     
+    
     log(f"   ✅ DuckMail 登录成功")
     
-    # 使用 Playwright 进行浏览器自动化
+    # 使用 DrissionPage 进行浏览器自动化（基于真实 Chrome，更难被检测）
     try:
-        from playwright.sync_api import sync_playwright
+        from DrissionPage import ChromiumPage, ChromiumOptions
     except ImportError:
-        log("   ❌ 需要安装 playwright: pip install playwright && playwright install chromium")
+        log("   ❌ 需要安装 DrissionPage: pip install DrissionPage")
         return False, None
     
-    with sync_playwright() as p:
-        # 配置代理
-        proxy_config = None
-        if PROXY_URL:
-            log(f"   使用代理: {PROXY_URL}")
-            proxy_config = {"server": PROXY_URL}
-        
-        # 启动浏览器
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
-                '--disable-blink-features=AutomationControlled',
-                '--disable-dev-shm-usage',
-                '--no-sandbox',
-            ]
-        )
-        
-        # 创建浏览器上下文
-        context = browser.new_context(
-            proxy=proxy_config,
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            viewport={'width': 1920, 'height': 1080},
-            locale='en-US',
-            timezone_id='America/New_York',
-        )
-        
-        page = context.new_page()
-        
-        # 使用 playwright-stealth 绕过检测
-        try:
-            from playwright_stealth import stealth_sync
-            stealth_sync(page)
-            log("   ✅ stealth 模式已启用")
-        except ImportError:
-            log("   ⚠️ playwright-stealth 未安装，使用基本配置")
-            # 手动隐藏 WebDriver 标志
-            context.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                });
-            """)
+    # 配置浏览器
+    co = ChromiumOptions()
+    co.set_argument('--headless=new')  # 无头模式
+    co.set_argument('--incognito')
+    if PROXY_URL:
+        log(f"   使用代理: {PROXY_URL}")
+        co.set_argument(f'--proxy-server={PROXY_URL}')
+    co.set_user_agent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    co.set_argument('--disable-blink-features=AutomationControlled')
+    co.set_argument('--disable-gpu')
+    co.set_argument('--no-sandbox')
+    co.set_argument('--disable-dev-shm-usage')
+    co.auto_port()
+    
+    page = None
+    try:
+        page = ChromiumPage(co)
+        page.run_js("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         
         # 创建截图目录
         os.makedirs("screenshots", exist_ok=True)
         account_id = email.split("@")[0][:10]
         
-        try:
-            max_retries = 3
-            for attempt in range(max_retries):
-                # 访问 Gemini Business
-                log(f"   打开 Gemini Business... (尝试 {attempt + 1}/{max_retries})")
-                page.goto("https://business.gemini.google/", timeout=30000)
-                page.wait_for_timeout(3000)
-                page.screenshot(path=f"screenshots/{account_id}_01_landing.png")
-                
-                # 输入邮箱
-                log("   输入邮箱...")
-                email_input = page.locator('#email-input').or_(
-                    page.locator('input[name="loginHint"]')).or_(
-                    page.locator('input[type="text"]'))
-                email_input.fill(email)
-                page.wait_for_timeout(500)
-                page.screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
-                
-                # 点击继续
-                continue_btn = page.locator('button:has-text("使用邮箱继续")').or_(
-                    page.locator('button:has-text("Continue with email")').or_(
-                    page.locator('button').first))
+        max_retries = 3
+        for attempt in range(max_retries):
+            # 访问 Gemini Business
+            log(f"   打开 Gemini Business... (尝试 {attempt + 1}/{max_retries})")
+            page.get("https://business.gemini.google/", timeout=30)
+            time.sleep(3)
+            page.get_screenshot(path=f"screenshots/{account_id}_01_landing.png")
+            
+            # 输入邮箱
+            log("   输入邮箱...")
+            email_input = page.ele('#email-input', timeout=3) or \
+                          page.ele('css:input[name="loginHint"]', timeout=2) or \
+                          page.ele('css:input[type="text"]', timeout=2)
+            if not email_input:
+                log("   ❌ 找不到邮箱输入框")
+                return False, None
+            email_input.click()
+            time.sleep(0.3)
+            email_input.clear()
+            email_input.input(email)
+            time.sleep(0.5)
+            page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
+            
+            # 点击继续按钮
+            continue_btn = page.ele('text:使用邮箱继续', timeout=2) or \
+                           page.ele('text:Continue with email', timeout=2) or \
+                           page.ele('css:button', timeout=2)
+            if continue_btn:
                 continue_btn.click()
-                page.wait_for_timeout(3000)
-                page.screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
+            time.sleep(3)
+            page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
+            
+            # 检查是否遇到错误页面
+            error_elem = page.ele('text:请试试其他方法', timeout=2) or \
+                         page.ele('text:Let\'s try something else', timeout=2)
+            if error_elem:
+                log(f"   ⚠️ 遇到服务器错误，重试...")
+                page.get_screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
                 
-                # 检查是否遇到错误页面
-                error_text = page.locator('text=请试试其他方法').or_(
-                    page.locator('text=Let\'s try something else'))
-                if error_text.count() > 0:
-                    log(f"   ⚠️ 遇到服务器错误，重试...")
-                    page.screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
-                    
-                    # 最后一次尝试也失败，退出
-                    if attempt >= max_retries - 1:
-                        log(f"   ❌ 重试 {max_retries} 次仍失败，跳过此账号")
-                        return False, None
-                    
-                    # 点击"注册或登录"按钮重试
-                    retry_btn = page.locator('button:has-text("注册或登录")').or_(
-                        page.locator('button:has-text("Sign up or sign in")'))
-                    if retry_btn.count() > 0:
-                        retry_btn.click()
-                        page.wait_for_timeout(2000)
-                    continue  # 重试
+                if attempt >= max_retries - 1:
+                    log(f"   ❌ 重试 {max_retries} 次仍失败，跳过此账号")
+                    if page:
+                        page.quit()
+                    return False, None
                 
-                # 等待验证码输入框
-                log("   等待验证码输入框...")
-                code_input = page.locator('input[name="pinInput"]').or_(
-                    page.locator('input[type="tel"]'))
-                try:
-                    code_input.wait_for(state="visible", timeout=30000)
-                    break  # 成功找到验证码输入框，退出重试循环
-                except Exception as e:
-                    if attempt < max_retries - 1:
-                        log(f"   ⚠️ 验证码输入框未出现，重试...")
-                        continue
-                    else:
-                        raise e  # 最后一次尝试也失败，抛出异常
+                # 点击重试按钮
+                retry_btn = page.ele('text:注册或登录', timeout=2) or \
+                            page.ele('text:Sign up or sign in', timeout=2)
+                if retry_btn:
+                    retry_btn.click()
+                    time.sleep(2)
+                continue
             
-            # 从 DuckMail 获取验证码
-            code = wait_for_verification_code(email, token)
-            if not code:
-                return False, None
-            
-            # 输入验证码
-            log("   输入验证码...")
-            code_input.fill(code)
-            page.wait_for_timeout(500)
-            
-            # 点击验证按钮
-            buttons = page.locator('button').all()
-            for btn in buttons:
-                btn_text = btn.text_content() or ""
-                if "重新" not in btn_text and "发送" not in btn_text:
-                    btn.click()
-                    break
-            
-            # 等待登录完成
-            log("   等待登录完成...")
+            # 等待验证码输入框
+            log("   等待验证码输入框... (最长 30 秒)")
+            code_input = None
             for _ in range(30):
-                page.wait_for_timeout(1000)
-                page_text = page.content()
-                current_url = page.url
-                
-                if "正在登录" in page_text or "Signing in" in page_text:
-                    continue
-                
-                if '/cid/' in current_url or "免费试用" in page_text:
+                code_input = page.ele('css:input[name="pinInput"]', timeout=1) or \
+                             page.ele('css:input[type="tel"]', timeout=1)
+                if code_input:
                     break
+                time.sleep(1)
             
-            # 提取 Cookie 和 URL 参数
-            current_url = page.url
-            cookies = context.cookies()
-            
-            # 从 URL 提取 csesidx 和 config_id
-            from urllib.parse import urlparse, parse_qs
-            parsed = urlparse(current_url)
-            query = parse_qs(parsed.query)
-            
-            csesidx = query.get('csesidx', [''])[0]
-            config_id = ""
-            path_parts = parsed.path.split('/')
-            if 'cid' in path_parts:
-                idx = path_parts.index('cid')
-                if idx + 1 < len(path_parts):
-                    config_id = path_parts[idx + 1]
-            
-            # 从 Cookie 提取 secure_c_ses 和 host_c_oses
-            secure_c_ses = ""
-            host_c_oses = ""
-            for c in cookies:
-                if c['name'] == '__Secure-C_SES':
-                    secure_c_ses = c['value']
-                elif c['name'] == '__Host-C_OSES':
-                    host_c_oses = c['value']
-            
-            if not secure_c_ses or not csesidx:
-                log("   ❌ 无法提取必要信息")
-                return False, None
-            
-            # 构造新的账号数据
-            new_account = {
-                "id": email,
-                "mail_password": mail_password,
-                "csesidx": csesidx,
-                "config_id": config_id or account.get('config_id', ''),
-                "secure_c_ses": secure_c_ses,
-                "host_c_oses": host_c_oses,
-                "expires_at": (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
-            }
-            
-            log("   ✅ 刷新成功！")
-            return True, new_account
-            
-        except Exception as e:
-            log(f"   ❌ 浏览器操作失败: {e}")
+            if code_input:
+                break  # 找到验证码输入框，退出重试循环
+            else:
+                if attempt < max_retries - 1:
+                    log(f"   ⚠️ 验证码输入框未出现，重试...")
+                    continue
+                else:
+                    log(f"   ❌ 验证码输入框始终未出现")
+                    if page:
+                        page.quit()
+                    return False, None
+        
+        # 从 DuckMail 获取验证码
+        code = wait_for_verification_code(email, token)
+        if not code:
+            if page:
+                page.quit()
             return False, None
-        finally:
-            browser.close()
+        
+        # 输入验证码
+        log("   输入验证码...")
+        code_input.click()
+        code_input.clear()
+        code_input.input(code)
+        time.sleep(0.5)
+        
+        # 点击验证按钮
+        buttons = page.eles('css:button')
+        for btn in buttons:
+            btn_text = btn.text or ""
+            if "重新" not in btn_text and "发送" not in btn_text:
+                btn.click()
+                break
+        
+        # 等待登录完成
+        log("   等待登录完成...")
+        for _ in range(30):
+            time.sleep(1)
+            page_text = page.html
+            current_url = page.url
+            
+            if "正在登录" in page_text or "Signing in" in page_text:
+                continue
+            
+            if '/cid/' in current_url or "免费试用" in page_text:
+                break
+        
+        # 提取 Cookie 和 URL 参数
+        current_url = page.url
+        cookies = page.cookies()
+        
+        # 从 URL 提取 csesidx 和 config_id
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(current_url)
+        query = parse_qs(parsed.query)
+        
+        csesidx = query.get('csesidx', [''])[0]
+        config_id = ""
+        path_parts = parsed.path.split('/')
+        if 'cid' in path_parts:
+            idx = path_parts.index('cid')
+            if idx + 1 < len(path_parts):
+                config_id = path_parts[idx + 1]
+        
+        # 从 Cookie 提取 secure_c_ses 和 host_c_oses
+        secure_c_ses = ""
+        host_c_oses = ""
+        for c in cookies:
+            name = c.get('name', '')
+            value = c.get('value', '')
+            if name == '__Secure-C_SES':
+                secure_c_ses = value
+            elif name == '__Host-C_OSES':
+                host_c_oses = value
+        
+        if not secure_c_ses or not csesidx:
+            log("   ❌ 无法提取必要信息")
+            if page:
+                page.quit()
+            return False, None
+        
+        # 构造新的账号数据
+        new_account = {
+            "id": email,
+            "mail_password": mail_password,
+            "csesidx": csesidx,
+            "config_id": config_id or account.get('config_id', ''),
+            "secure_c_ses": secure_c_ses,
+            "host_c_oses": host_c_oses,
+            "expires_at": (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        log("   ✅ 刷新成功！")
+        if page:
+            page.quit()
+        return True, new_account
+        
+    except Exception as e:
+        log(f"   ❌ 浏览器操作失败: {e}")
+        if page:
+            page.quit()
+        return False, None
 
 
 def refresh_all_accounts(force=False):

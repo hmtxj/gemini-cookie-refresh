@@ -22,10 +22,16 @@ jobs:
         with:
           python-version: '3.11'
       
+      - name: 安装 Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+      
       - name: 安装依赖
         run: |
-          pip install playwright requests huggingface_hub psycopg2-binary pyyaml playwright-stealth
-          playwright install chromium
+          pip install DrissionPage requests huggingface_hub psycopg2-binary pyyaml
+          # 验证 Chrome 安装
+          google-chrome --version || chromium-browser --version || echo "Chrome not found in PATH"
       
       # 从 Secret 恢复 Clash 配置并启动代理
       - name: 设置代理
