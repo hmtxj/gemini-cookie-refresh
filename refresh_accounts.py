@@ -28,7 +28,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 def log(msg):
     """打印带时间戳的日志"""
     timestamp = datetime.now().strftime("%H:%M:%S")
-    print(f"[{timestamp}] {msg}")
+    print(f"[{timestamp}] {msg}", flush=True)
 
 
 def is_database_enabled():
