@@ -41,25 +41,14 @@ jobs:
           echo "📥 下载订阅配置..."
           curl -s -o config.yaml "$SUBSCRIBE_URL"
           
-          # 修改配置：设置端口和模式
-          python3 - <<'EOF'
-import yaml
-with open('config.yaml', 'r') as f:
-    config = yaml.safe_load(f)
-config['mixed-port'] = 7890
-config['allow-lan'] = True
-config['mode'] = 'global'
-config['external-controller'] = '127.0.0.1:9090'
-with open('config.yaml', 'w') as f:
-    yaml.dump(config, f, allow_unicode=True)
-print("✅ 配置已更新")
-EOF
+          echo "📝 修改配置..."
+          python3 update_clash_config.py config.yaml
           
           echo "🚀 启动 Clash..."
           nohup ./clash -f config.yaml > clash.log 2>&1 &
           sleep 5
           
-          # 验证代理可用
+          echo "🔍 验证代理..."
           if curl -s --proxy http://127.0.0.1:7890 --connect-timeout 10 https://www.google.com > /dev/null; then
             echo "✅ 代理可用"
           else
