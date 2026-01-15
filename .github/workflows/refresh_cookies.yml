@@ -24,7 +24,7 @@ jobs:
       
       - name: 安装依赖
         run: |
-          pip install playwright requests huggingface_hub
+          pip install playwright requests huggingface_hub psycopg2-binary
           playwright install chromium
       
       - name: 从 Secret 恢复 accounts.json
@@ -33,18 +33,17 @@ jobs:
         run: |
           printf '%s' "$ACCOUNTS_JSON" > accounts.json
           echo "accounts.json 内容长度: $(wc -c < accounts.json) 字节"
-          head -c 100 accounts.json
       
       - name: 运行刷新脚本
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          python refresh_accounts.py --push
+          python refresh_accounts.py --force
       
       - name: 更新 Secret 中的 accounts.json
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          # 使用 GitHub CLI 更新 Secret
           gh secret set ACCOUNTS_JSON < accounts.json

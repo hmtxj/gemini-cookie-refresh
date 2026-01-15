@@ -21,6 +21,9 @@ DUCKMAIL_API = "https://api.duckmail.sbs"
 # 可选：代理配置（GitHub Actions 上可能需要）
 PROXY_URL = os.environ.get("PROXY_URL", None)
 
+# 数据库配置
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+
 
 def log(msg):
     """打印带时间戳的日志"""
@@ -28,8 +31,76 @@ def log(msg):
     print(f"[{timestamp}] {msg}")
 
 
+def is_database_enabled():
+    """检查是否启用数据库模式"""
+    return bool(DATABASE_URL)
+
+
+def db_load_accounts():
+    """从数据库加载账号"""
+    if not DATABASE_URL:
+        return None
+    try:
+        import psycopg2
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT value FROM kv_store WHERE key = 'accounts'")
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if row:
+            data = row[0]
+            if isinstance(data, str):
+                return json.loads(data)
+            return data
+        return []
+    except Exception as e:
+        log(f"❌ 数据库读取失败: {e}")
+        return None
+
+
+def db_save_accounts(accounts):
+    """保存账号到数据库"""
+    if not DATABASE_URL:
+        return False
+    try:
+        import psycopg2
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+        # 确保表存在
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS kv_store (
+                key TEXT PRIMARY KEY,
+                value JSONB NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # 插入或更新
+        cur.execute("""
+            INSERT INTO kv_store (key, value, updated_at)
+            VALUES ('accounts', %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (key) DO UPDATE SET
+                value = EXCLUDED.value,
+                updated_at = CURRENT_TIMESTAMP
+        """, (json.dumps(accounts, ensure_ascii=False),))
+        conn.commit()
+        cur.close()
+        conn.close()
+        log(f"✅ 已保存 {len(accounts)} 个账号到数据库")
+        return True
+    except Exception as e:
+        log(f"❌ 数据库写入失败: {e}")
+        return False
+
+
 def load_accounts():
-    """加载 accounts.json"""
+    """加载账号（优先数据库，fallback 到文件）"""
+    if is_database_enabled():
+        accounts = db_load_accounts()
+        if accounts is not None:
+            log(f"📦 从数据库加载了 {len(accounts)} 个账号")
+            return accounts
+    # 文件模式
     if not os.path.exists(ACCOUNTS_FILE):
         log(f"❌ {ACCOUNTS_FILE} 不存在")
         return []
@@ -38,10 +109,15 @@ def load_accounts():
 
 
 def save_accounts(accounts):
-    """保存 accounts.json"""
+    """保存账号（同时保存到数据库和文件）"""
+    # 保存到文件
     with open(ACCOUNTS_FILE, 'w', encoding='utf-8') as f:
         json.dump(accounts, f, ensure_ascii=False, indent=2)
     log(f"✅ 已保存 {len(accounts)} 个账号到 {ACCOUNTS_FILE}")
+    
+    # 如果启用数据库，同时保存到数据库
+    if is_database_enabled():
+        db_save_accounts(accounts)
 
 
 def get_remaining_hours(expires_at):
