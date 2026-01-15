@@ -31,7 +31,9 @@ jobs:
         env:
           ACCOUNTS_JSON: ${{ secrets.ACCOUNTS_JSON }}
         run: |
-          echo "$ACCOUNTS_JSON" > accounts.json
+          printf '%s' "$ACCOUNTS_JSON" > accounts.json
+          echo "accounts.json 内容长度: $(wc -c < accounts.json) 字节"
+          head -c 100 accounts.json
       
       - name: 运行刷新脚本
         env:
