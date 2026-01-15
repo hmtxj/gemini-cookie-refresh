@@ -60,13 +60,25 @@ jobs:
           sleep 5
           
           echo "🔍 验证代理..."
-          if curl -s --proxy http://127.0.0.1:7890 --connect-timeout 10 https://www.google.com > /dev/null; then
-            echo "✅ 代理可用"
+          echo "📍 不使用代理的 IP:"
+          curl -s https://api.ipify.org || echo "Failed"
+          
+          echo ""
+          echo "📍 使用代理后的 IP:"
+          PROXY_IP=$(curl -s --proxy http://127.0.0.1:7890 --connect-timeout 10 https://api.ipify.org) || echo "Failed"
+          echo "$PROXY_IP"
+          
+          if [ -n "$PROXY_IP" ]; then
+            echo "✅ 代理可用，出口 IP: $PROXY_IP"
           else
             echo "❌ 代理不可用，查看日志:"
             cat clash.log
             exit 1
           fi
+          
+          echo ""
+          echo "📍 查看 Clash 当前状态:"
+          curl -s http://127.0.0.1:9090/proxies 2>/dev/null | head -c 1000 || echo "无法访问 Clash API"
       
       - name: 从 Secret 恢复 accounts.json
         env:
