@@ -1,0 +1,5 @@
+# Python 3.10+
+
+DrissionPage>=4.1.0
+requests>=2.31.0
+PyYAML>=6.0

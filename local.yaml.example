@@ -1,0 +1,22 @@
+# Clash 配置模板
+# 请将你的订阅配置复制到此文件，并重命名为 local.yaml
+
+mixed-port: 7890
+allow-lan: true
+mode: rule
+log-level: info
+external-controller: '127.0.0.1:9090'
+
+proxies:
+  # 在这里添加你的代理节点
+  # 示例:
+  # - { name: '节点名称', type: trojan, server: your.server.com, port: 443, password: your-password }
+
+proxy-groups:
+  - name: 代理组名称
+    type: select
+    proxies:
+      # 添加你的节点名称
+
+rules:
+  - MATCH,DIRECT
