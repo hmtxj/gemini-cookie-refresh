@@ -270,15 +270,19 @@ def refresh_single_account(account):
         log("   ❌ 需要安装 DrissionPage: pip install DrissionPage")
         return False, None
     
-    # 配置浏览器
+    # 随机 UA（与注册机保持一致）
+    import random
+    versions = ["120.0.0.0", "121.0.0.0", "122.0.0.0", "123.0.0.0", "124.0.0.0"]
+    random_ua = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.choice(versions)} Safari/537.36"
+    
+    # 配置浏览器（与注册机保持一致）
     co = ChromiumOptions()
-    # 不使用 headless 模式，让 Xvfb 虚拟显示器运行真实 GUI
-    # co.set_argument('--headless=new')
+    co.set_argument('--headless=new')  # 使用 headless=new 模式（注册机使用的模式）
     co.set_argument('--incognito')
     if PROXY_URL:
         log(f"   使用代理: {PROXY_URL}")
         co.set_argument(f'--proxy-server={PROXY_URL}')
-    co.set_user_agent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    co.set_user_agent(random_ua)
     co.set_argument('--disable-blink-features=AutomationControlled')
     co.set_argument('--disable-gpu')
     co.set_argument('--no-sandbox')
