@@ -328,12 +328,19 @@ def refresh_single_account(account):
             time.sleep(0.5)
             page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
             
-            # 点击继续按钮
-            continue_btn = page.ele('text:使用邮箱继续', timeout=2) or \
-                           page.ele('text:Continue with email', timeout=2) or \
-                           page.ele('css:button', timeout=2)
+            # 点击继续按钮（与注册机保持一致的选择器和点击逻辑）
+            time.sleep(0.5)
+            continue_btn = page.ele('tag:button@text():使用邮箱继续', timeout=2) or \
+                           page.ele('tag:button@text():Continue with email', timeout=2) or \
+                           page.ele('tag:button', timeout=1)
             if continue_btn:
-                continue_btn.click()
+                try:
+                    continue_btn.click()
+                except:
+                    continue_btn.click(by_js=True)
+            else:
+                # 如果没找到按钮，尝试回车
+                email_input.input('\n')
             time.sleep(3)
             page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
