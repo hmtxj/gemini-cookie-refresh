@@ -195,40 +195,50 @@ def wait_for_verification_code(email, token, timeout=180):
                         verify=False
                     )
                     data = detail.json()
-                    content = data.get('text') or data.get('html') or ""
+                    # 同时获取 text 和 html，都要检查
+                    text_content = data.get('text') or ""
+                    html_content = data.get('html') or ""
                     subject = data.get('subject', '')
                     
                     if poll_count == 1:
                         log(f"   [邮件标题] {subject[:50]}...")
-                        log(f"   [邮件内容长度] {len(content)} 字符")
-                        # 打印邮件内容的前 200 个字符用于调试
-                        if content:
-                            log(f"   [邮件内容前200字符] {content[:200]}...")
+                        log(f"   [text长度] {len(text_content)} 字符")
+                        log(f"   [html长度] {len(html_content)} 字符")
                     
-                    # 提取验证码 - 多种方式尝试
+                    # 提取验证码 - 优先从 html 提取（通常更完整）
                     import re
                     
-                    # 方式1: 严格匹配6位数字
-                    digits = re.findall(r'\b\d{6}\b', content)
-                    if digits:
-                        log(f"   ✅ 找到验证码: {digits[0]}")
-                        return digits[0]
+                    def extract_code(content):
+                        if not content:
+                            return None
+                        # 方式1: 匹配上下文关键词 + 验证码（注册机的方法）
+                        pattern_context = r'(?:验证码|code|verification|passcode|pin).*?[:：\s]\s*([A-Za-z0-9]{4,8})\b'
+                        match = re.search(pattern_context, content, re.IGNORECASE | re.DOTALL)
+                        if match:
+                            return match.group(1)
+                        # 方式2: 匹配6位数字边界
+                        digits = re.findall(r'\b\d{6}\b', content)
+                        if digits:
+                            return digits[0]
+                        # 方式3: 匹配任意6位连续数字
+                        digits = re.findall(r'(\d{6})', content)
+                        if digits:
+                            return digits[0]
+                        return None
                     
-                    # 方式2: 匹配任意6位连续数字
-                    digits = re.findall(r'(\d{6})', content)
-                    if digits:
-                        log(f"   ✅ 找到验证码: {digits[0]}")
-                        return digits[0]
+                    # 优先从 html 提取（通常更完整），然后 text，最后 subject
+                    code = extract_code(html_content) or extract_code(text_content) or extract_code(subject)
                     
-                    # 方式3: 从标题中提取
-                    digits = re.findall(r'(\d{6})', subject)
-                    if digits:
-                        log(f"   ✅ 从标题找到验证码: {digits[0]}")
-                        return digits[0]
+                    if code:
+                        log(f"   ✅ 找到验证码: {code}")
+                        return code
                     
-                    # 如果是第一次轮询且没找到，打印警告
+                    # 如果是第一次轮询且没找到，打印更多调试信息
                     if poll_count == 1:
                         log(f"   [警告] 邮件中未找到6位验证码")
+                        # 打印 html 内容的前 500 字符用于调试
+                        if html_content:
+                            log(f"   [html前500字符] {html_content[:500]}...")
             else:
                 if poll_count == 1:
                     log(f"   [轮询失败] HTTP {resp.status_code}")
