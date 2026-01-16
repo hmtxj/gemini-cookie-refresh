@@ -196,9 +196,24 @@ def wait_for_verification_code(email, token, timeout=180):
                     )
                     data = detail.json()
                     # 同时获取 text 和 html，都要检查
-                    text_content = data.get('text') or ""
-                    html_content = data.get('html') or ""
+                    # 注意：API 可能返回 list 类型，需要转换为字符串
+                    text_raw = data.get('text') or ""
+                    html_raw = data.get('html') or ""
+                    
+                    # 确保是字符串类型
+                    if isinstance(text_raw, list):
+                        text_content = ' '.join(str(x) for x in text_raw)
+                    else:
+                        text_content = str(text_raw) if text_raw else ""
+                    
+                    if isinstance(html_raw, list):
+                        html_content = ' '.join(str(x) for x in html_raw)
+                    else:
+                        html_content = str(html_raw) if html_raw else ""
+                    
                     subject = data.get('subject', '')
+                    if isinstance(subject, list):
+                        subject = ' '.join(str(x) for x in subject)
                     
                     if poll_count == 1:
                         log(f"   [邮件标题] {subject[:50]}...")
