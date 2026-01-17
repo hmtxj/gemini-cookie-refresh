@@ -209,30 +209,26 @@ def wait_for_verification_code(email, token, timeout=180):
                         if content:
                             log(f"   [邮件内容前200字符] {content[:200]}...")
                     
-                    # 提取验证码 - 多种方式尝试
+                    # 提取验证码 - 按照注册机 mail_client.py 的逻辑
                     import re
                     
-                    # 方式1: 严格匹配6位数字
+                    # 方式1: 匹配上下文关键词后的验证码（字母+数字 4-8 位）
+                    pattern_context = r'(?:验证码|code|verification|passcode|pin|一次性).*?[:：是]?\s*([A-Za-z0-9]{4,8})\b'
+                    match = re.search(pattern_context, content, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        code = match.group(1).upper()
+                        log(f"   ✅ 找到验证码: {code}")
+                        return code
+                    
+                    # 方式2: 严格匹配6位纯数字（兜底）
                     digits = re.findall(r'\b\d{6}\b', content)
                     if digits:
                         log(f"   ✅ 找到验证码: {digits[0]}")
                         return digits[0]
                     
-                    # 方式2: 匹配任意6位连续数字
-                    digits = re.findall(r'(\d{6})', content)
-                    if digits:
-                        log(f"   ✅ 找到验证码: {digits[0]}")
-                        return digits[0]
-                    
-                    # 方式3: 从标题中提取
-                    digits = re.findall(r'(\d{6})', subject)
-                    if digits:
-                        log(f"   ✅ 从标题找到验证码: {digits[0]}")
-                        return digits[0]
-                    
                     # 如果是第一次轮询且没找到，打印警告
                     if poll_count == 1:
-                        log(f"   [警告] 邮件中未找到6位验证码")
+                        log(f"   [警告] 邮件中未找到验证码")
             else:
                 if poll_count == 1:
                     log(f"   [轮询失败] HTTP {resp.status_code}")
@@ -393,6 +389,16 @@ def refresh_single_account(account):
         # 从 DuckMail 获取验证码
         code = wait_for_verification_code(email, token)
         if not code:
+            log("   ❌ 获取验证码失败")
+            if page:
+                page.quit()
+            return False, None
+        
+        # 重新获取验证码输入框（可能已过期）
+        code_input = page.ele('css:input[name="pinInput"]', timeout=3) or \
+                     page.ele('css:input[type="tel"]', timeout=2)
+        if not code_input:
+            log("   ❌ 验证码输入框已失效")
             if page:
                 page.quit()
             return False, None
@@ -400,30 +406,61 @@ def refresh_single_account(account):
         # 输入验证码
         log("   输入验证码...")
         code_input.click()
+        time.sleep(0.2)
         code_input.clear()
         code_input.input(code)
-        time.sleep(0.5)
+        time.sleep(0.3)
         
-        # 点击验证按钮
-        buttons = page.eles('css:button')
+        # 触发 JS 事件（按照注册机方式）
+        try:
+            page.run_js('''
+                let el = document.querySelector("input[name=pinInput]") || document.querySelector("input[type=tel]");
+                if(el) {
+                    el.dispatchEvent(new Event("input", {bubbles: true}));
+                    el.dispatchEvent(new Event("change", {bubbles: true}));
+                }
+            ''')
+        except:
+            pass
+        
+        # 点击验证按钮（按照注册机方式）
+        log("   点击验证按钮...")
+        buttons = page.eles('tag:button')
         for btn in buttons:
-            btn_text = btn.text or ""
-            if "重新" not in btn_text and "发送" not in btn_text:
-                btn.click()
+            btn_text = btn.text.strip() if btn.text else ""
+            if btn_text and "重新" not in btn_text and "发送" not in btn_text and "resend" not in btn_text.lower():
+                try:
+                    btn.click()
+                except:
+                    btn.click(by_js=True)
                 break
         
-        # 等待登录完成
+        # 等待登录完成（按照注册机方式）
         log("   等待登录完成...")
-        for _ in range(30):
+        login_complete = False
+        for i in range(30):
             time.sleep(1)
-            page_text = page.html
-            current_url = page.url
+            page_text = page.html or ""
+            current_url = page.url or ""
             
+            # 检查是否还在登录中
             if "正在登录" in page_text or "Signing in" in page_text:
                 continue
             
-            if '/cid/' in current_url or "免费试用" in page_text:
+            # 检查是否登录成功
+            if '/cid/' in current_url:
+                log("   ✅ 登录成功，URL 包含 /cid/")
+                login_complete = True
                 break
+            if "免费试用" in page_text or "全名" in page_text or "新对话" in page_text:
+                log("   ✅ 登录成功，检测到主页面")
+                login_complete = True
+                break
+        
+        if not login_complete:
+            log("   ⚠️ 登录状态不确定")
+        
+        time.sleep(2)  # 额外等待确保页面加载完成
         
         # 提取 Cookie 和 URL 参数
         current_url = page.url
