@@ -402,7 +402,7 @@ def refresh_single_account(account):
                 log("   未找到按钮，尝试回车提交...")
                 email_input.input('\n')
             
-            time.sleep(4)  # 等待页面加载
+            time.sleep(6)  # 增加等待页面加载时间（从 4 秒增加到 6 秒）
             page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
             # 检查是否遇到错误页面
@@ -459,11 +459,13 @@ def refresh_single_account(account):
         
         # 输入验证码
         log("   输入验证码...")
+        page.get_screenshot(path=f"screenshots/{account_id}_04_before_code.png")
         code_input.click()
-        time.sleep(0.2)
+        time.sleep(0.5)  # 增加等待
         code_input.clear()
-        code_input.input(code)
         time.sleep(0.3)
+        code_input.input(code)
+        time.sleep(0.5)  # 增加等待
         # 触发 JavaScript 事件
         try:
             page.run_js('''
@@ -475,28 +477,63 @@ def refresh_single_account(account):
             ''')
         except:
             pass
-        time.sleep(0.3)
+        time.sleep(0.5)
+        page.get_screenshot(path=f"screenshots/{account_id}_05_code_entered.png")
         
         # 点击验证按钮
-        buttons = page.eles('css:button')
-        for btn in buttons:
-            btn_text = btn.text or ""
-            if "重新" not in btn_text and "发送" not in btn_text:
-                btn.click()
-                break
+        log("   点击验证按钮...")
+        verify_btn = page.ele('tag:button@text():验证', timeout=3) or \
+                     page.ele('tag:button@text():Verify', timeout=2)
+        if verify_btn:
+            verify_btn.click()
+        else:
+            # 尝试找其他按钮
+            buttons = page.eles('css:button')
+            for btn in buttons:
+                btn_text = btn.text or ""
+                if "重新" not in btn_text and "发送" not in btn_text and btn_text.strip():
+                    btn.click()
+                    break
         
-        # 等待登录完成
+        time.sleep(3)  # 等待请求发送
+        page.get_screenshot(path=f"screenshots/{account_id}_06_after_verify.png")
+        
+        # 等待登录完成 - 增加等待时间和更多检测
         log("   等待登录完成...")
-        for _ in range(30):
+        login_success = False
+        for i in range(40):  # 增加到 40 秒
             time.sleep(1)
-            page_text = page.html
-            current_url = page.url
+            current_url = page.url or ""
+            page_html = page.html or ""
             
-            if "正在登录" in page_text or "Signing in" in page_text:
+            # 检测是否正在加载
+            if "正在登录" in page_html or "Signing in" in page_html or "loading" in page_html.lower():
+                if i == 10:
+                    log("   仍在等待登录完成...")
                 continue
             
-            if '/cid/' in current_url or "免费试用" in page_text:
+            # 检测成功：URL 包含 /cid/ 或 /home/ 或页面包含关键元素
+            if '/cid/' in current_url or '/home/' in current_url:
+                log(f"   ✅ 检测到登录成功，URL: {current_url[:80]}...")
+                login_success = True
                 break
+            
+            # 检测成功：页面包含 Gemini Enterprise 相关内容
+            if "Gemini Enterprise" in page_html or "免费试用" in page_html or "新对话" in page_html:
+                log("   ✅ 检测到主页面内容")
+                login_success = True
+                break
+            
+            # 检测验证码错误
+            if "验证码无效" in page_html or "Invalid code" in page_html or "incorrect" in page_html.lower():
+                log("   ❌ 验证码无效")
+                page.get_screenshot(path=f"screenshots/{account_id}_error_invalid_code.png")
+                break
+        
+        page.get_screenshot(path=f"screenshots/{account_id}_07_final_state.png")
+        
+        if not login_success:
+            log(f"   ⚠️ 登录状态不确定，当前 URL: {current_url[:80]}...")
         
         # 提取 Cookie 和 URL 参数
         current_url = page.url
@@ -528,6 +565,10 @@ def refresh_single_account(account):
         
         if not secure_c_ses or not csesidx:
             log("   ❌ 无法提取必要信息")
+            log(f"   [调试] secure_c_ses: {bool(secure_c_ses)}, csesidx: {bool(csesidx)}, config_id: {bool(config_id)}")
+            log(f"   [调试] 当前URL: {current_url[:100]}...")
+            log(f"   [调试] Cookie数量: {len(cookies)}")
+            page.get_screenshot(path=f"screenshots/{account_id}_error_no_info.png")
             if page:
                 page.quit()
             return False, None
