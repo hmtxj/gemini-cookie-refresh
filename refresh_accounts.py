@@ -220,43 +220,57 @@ def wait_for_verification_code(email, token, timeout=180):
                         log(f"   [text长度] {len(text_content)} 字符")
                         log(f"   [html长度] {len(html_content)} 字符")
                     
-                    # 提取验证码 - 优先从 html 提取（通常更完整）
+                    # 提取验证码 - 按照注册机 mail_client.py 的逻辑
                     import re
                     
-                    def extract_code(content):
+                    def extract_code_from_text(content):
+                        """从纯文本中提取验证码（参考注册机 mail_client.py）"""
                         if not content:
                             return None
-                        # Gemini 验证码格式：6位大写字母+数字混合，如 7HXMRZ
-                        # 关键：必须同时包含字母和数字！（排除纯数字如 HTML 颜色 #333333）
                         
-                        def is_valid_code(code):
-                            """验证码必须同时包含字母和数字"""
-                            has_letter = bool(re.search(r'[A-Z]', code))
-                            has_digit = bool(re.search(r'\d', code))
-                            return has_letter and has_digit
-                        
-                        # 方式1: 匹配独立的6位大写字母数字组合
-                        codes = re.findall(r'\b([A-Z0-9]{6})\b', content)
-                        for code in codes:
-                            if is_valid_code(code):
+                        # 方法1: 匹配上下文关键词后的验证码（注册机的主要方法）
+                        pattern_context = r'(?:验证码|code|verification|passcode|pin|一次性)[^\d]*[:：]?\s*([A-Z0-9]{6})'
+                        match = re.search(pattern_context, content, re.IGNORECASE)
+                        if match:
+                            code = match.group(1).upper()
+                            # Gemini 验证码必须同时包含字母和数字
+                            if re.search(r'[A-Z]', code) and re.search(r'\d', code):
                                 return code
                         
-                        # 方式2: 从 HTML 中提取（验证码通常在 > 和 < 之间）
-                        codes = re.findall(r'>([A-Z0-9]{6})<', content)
+                        # 方法2: 匹配独立的6位验证码（必须同时包含字母和数字）
+                        codes = re.findall(r'\b([A-Z0-9]{6})\b', content.upper())
                         for code in codes:
-                            if is_valid_code(code):
-                                return code
-                        
-                        # 方式3: 匹配任意6位大写字母数字（放宽边界）
-                        codes = re.findall(r'([A-Z0-9]{6})', content)
-                        for code in codes:
-                            if is_valid_code(code):
+                            if re.search(r'[A-Z]', code) and re.search(r'\d', code):
                                 return code
                         
                         return None
                     
-                    # 优先从 html 提取（通常更完整），然后 text，最后 subject
-                    code = extract_code(html_content) or extract_code(text_content) or extract_code(subject)
+                    def extract_code_from_html(content):
+                        """从 HTML 中提取验证码（更精准，避免匹配颜色代码）"""
+                        if not content:
+                            return None
+                        
+                        # 从 HTML 标签之间提取（>CODE<），这样可以避免匹配 #333333
+                        codes = re.findall(r'>([A-Z0-9]{6})<', content.upper())
+                        for code in codes:
+                            if re.search(r'[A-Z]', code) and re.search(r'\d', code):
+                                return code
+                        
+                        # 如果上面没找到，尝试匹配在特殊样式标签中的验证码
+                        # 如 <td style="...">7HXMRZ</td>
+                        matches = re.findall(r'<td[^>]*>([A-Z0-9]{6})</td>', content, re.IGNORECASE)
+                        for code in matches:
+                            code = code.upper()
+                            if re.search(r'[A-Z]', code) and re.search(r'\d', code):
+                                return code
+                        
+                        return None
+                    
+                    # 优先从 text 字段提取（纯文本，没有 HTML 颜色代码干扰）
+                    # 然后从 subject 提取，最后从 html 提取
+                    code = extract_code_from_text(text_content) or \
+                           extract_code_from_text(subject) or \
+                           extract_code_from_html(html_content)
                     
                     if code:
                         log(f"   ✅ 找到验证码: {code}")
@@ -265,9 +279,9 @@ def wait_for_verification_code(email, token, timeout=180):
                     # 如果是第一次轮询且没找到，打印更多调试信息
                     if poll_count == 1:
                         log(f"   [警告] 邮件中未找到6位验证码")
-                        # 打印 html 内容的前 500 字符用于调试
-                        if html_content:
-                            log(f"   [html前500字符] {html_content[:500]}...")
+                        # 打印 text 内容用于调试（text 更干净）
+                        if text_content:
+                            log(f"   [text内容前300字符] {text_content[:300]}...")
             else:
                 if poll_count == 1:
                     log(f"   [轮询失败] HTTP {resp.status_code}")
