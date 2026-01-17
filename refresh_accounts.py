@@ -226,19 +226,19 @@ def wait_for_verification_code(email, token, timeout=180):
                     def extract_code(content):
                         if not content:
                             return None
-                        # 方式1: 匹配上下文关键词 + 验证码（注册机的方法）
-                        pattern_context = r'(?:验证码|code|verification|passcode|pin).*?[:：\s]\s*([A-Za-z0-9]{4,8})\b'
-                        match = re.search(pattern_context, content, re.IGNORECASE | re.DOTALL)
-                        if match:
-                            return match.group(1)
-                        # 方式2: 匹配6位数字边界
-                        digits = re.findall(r'\b\d{6}\b', content)
+                        # 方式1: 优先匹配6位纯数字（最可靠）
+                        digits = re.findall(r'\b(\d{6})\b', content)
                         if digits:
                             return digits[0]
-                        # 方式3: 匹配任意6位连续数字
+                        # 方式2: 匹配连续6位数字（不要求边界）
                         digits = re.findall(r'(\d{6})', content)
                         if digits:
                             return digits[0]
+                        # 方式3: 匹配上下文关键词后跟6位数字
+                        pattern_context = r'(?:验证码|code|verification|passcode|pin)[^\d]*(\d{6})'
+                        match = re.search(pattern_context, content, re.IGNORECASE)
+                        if match:
+                            return match.group(1)
                         return None
                     
                     # 优先从 html 提取（通常更完整），然后 text，最后 subject
