@@ -209,22 +209,16 @@ def wait_for_verification_code(email, token, timeout=180):
                         if content:
                             log(f"   [邮件内容前200字符] {content[:200]}...")
                     
-                    # 提取验证码 - 按照注册机 mail_client.py 的逻辑
+                    # 提取验证码 - Gemini 验证码是字母+数字混合（如 7HXMRZ）
                     import re
                     
-                    # 方式1: 匹配上下文关键词后的验证码（字母+数字 4-8 位）
+                    # 匹配上下文关键词后的验证码（字母+数字 4-8 位）
                     pattern_context = r'(?:验证码|code|verification|passcode|pin).*?[:：]\s*([A-Za-z0-9]{4,8})\b'
                     match = re.search(pattern_context, content, re.IGNORECASE | re.DOTALL)
                     if match:
                         code = match.group(1).upper()
                         log(f"   ✅ 找到验证码: {code}")
                         return code
-                    
-                    # 方式2: 纯数字兜底（与注册机一致）
-                    digits = re.findall(r'\b\d{6}\b', content)
-                    if digits:
-                        log(f"   ✅ 找到验证码: {digits[0]}")
-                        return digits[0]
                     
                     # 如果是第一次轮询且没找到，打印警告
                     if poll_count == 1:
