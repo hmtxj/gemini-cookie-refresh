@@ -227,23 +227,32 @@ def wait_for_verification_code(email, token, timeout=180):
                         if not content:
                             return None
                         # Gemini 验证码格式：6位大写字母+数字混合，如 7HXMRZ
+                        # 关键：必须同时包含字母和数字！（排除纯数字如 HTML 颜色 #333333）
+                        
+                        def is_valid_code(code):
+                            """验证码必须同时包含字母和数字"""
+                            has_letter = bool(re.search(r'[A-Z]', code))
+                            has_digit = bool(re.search(r'\d', code))
+                            return has_letter and has_digit
+                        
                         # 方式1: 匹配独立的6位大写字母数字组合
                         codes = re.findall(r'\b([A-Z0-9]{6})\b', content)
-                        # 过滤掉纯字母单词（如 "Google"）
                         for code in codes:
-                            if re.search(r'\d', code):  # 必须包含至少一个数字
+                            if is_valid_code(code):
                                 return code
-                        # 方式2: 匹配任意6位大写字母数字（放宽边界）
+                        
+                        # 方式2: 从 HTML 中提取（验证码通常在 > 和 < 之间）
+                        codes = re.findall(r'>([A-Z0-9]{6})<', content)
+                        for code in codes:
+                            if is_valid_code(code):
+                                return code
+                        
+                        # 方式3: 匹配任意6位大写字母数字（放宽边界）
                         codes = re.findall(r'([A-Z0-9]{6})', content)
                         for code in codes:
-                            if re.search(r'\d', code):  # 必须包含至少一个数字
+                            if is_valid_code(code):
                                 return code
-                        # 方式3: 从 HTML 中提取（验证码通常在特殊样式中）
-                        # 匹配类似 <td>7HXMRZ</td> 或独立行的验证码
-                        pattern = r'>([A-Z0-9]{6})<'
-                        match = re.search(pattern, content)
-                        if match and re.search(r'\d', match.group(1)):
-                            return match.group(1)
+                        
                         return None
                     
                     # 优先从 html 提取（通常更完整），然后 text，最后 subject
