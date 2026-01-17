@@ -324,34 +324,87 @@ def refresh_single_account(account):
         account_id = email.split("@")[0][:10]
         
         max_retries = 3
-        from urllib.parse import quote
         
         for attempt in range(max_retries):
             # ============================================================
-            # 新方案：直接跳转到登录页面，跳过首页邮箱输入步骤
-            # 参考：https://auth.business.gemini.google/login/email?loginHint=xxx
-            # 这样可以减少被 reCAPTCHA 拦截的机会
+            # 正确流程：首页输入邮箱 → 点击"使用邮箱继续"按钮 → 验证码页面
+            # 不能直接跳转 URL，否则会报"格式不正确"错误
             # ============================================================
             
-            log(f"   打开登录页面... (尝试 {attempt + 1}/{max_retries})")
-            
-            # 方法1：先访问主页设置必要的 Cookie
-            page.get("https://auth.business.gemini.google/", timeout=30)
-            time.sleep(2)
-            
-            # 直接跳转到带 loginHint 的登录页面
-            login_url = f"https://auth.business.gemini.google/login/email?continueUrl=https%3A%2F%2Fbusiness.gemini.google%2F&loginHint={quote(email)}"
-            log(f"   直接跳转到验证页面...")
-            page.get(login_url, timeout=30)
+            log(f"   打开 Gemini Business... (尝试 {attempt + 1}/{max_retries})")
+            page.get("https://business.gemini.google/", timeout=30)
             time.sleep(3)
-            page.get_screenshot(path=f"screenshots/{account_id}_01_login_page.png")
+            page.get_screenshot(path=f"screenshots/{account_id}_01_landing.png")
             
-            # 检查当前页面状态
-            current_url = page.url
-            page_html = page.html or ""
+            # 输入邮箱
+            log("   输入邮箱...")
+            email_input = page.ele('#email-input', timeout=5) or \
+                          page.ele('css:input[name="loginHint"]', timeout=3) or \
+                          page.ele('css:input[type="text"]', timeout=3) or \
+                          page.ele('css:input[type="email"]', timeout=3)
+            if not email_input:
+                log("   ❌ 找不到邮箱输入框")
+                page.get_screenshot(path=f"screenshots/{account_id}_no_email_input.png")
+                if page:
+                    page.quit()
+                return False, None
+            
+            # 点击输入框并输入邮箱
+            email_input.click()
+            time.sleep(0.5)
+            email_input.clear()
+            time.sleep(0.3)
+            email_input.input(email)
+            time.sleep(0.5)
+            
+            # 触发 JavaScript 事件
+            page.run_js('''
+                let el = document.querySelector("#email-input") || document.querySelector("input[type=email]") || document.querySelector("input[type=text]");
+                if(el) {
+                    el.dispatchEvent(new Event("input", {bubbles: true}));
+                    el.dispatchEvent(new Event("change", {bubbles: true}));
+                    el.dispatchEvent(new Event("blur", {bubbles: true}));
+                }
+            ''')
+            time.sleep(0.5)
+            page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
+            
+            # 关键步骤：点击"使用邮箱继续"按钮
+            log("   点击'使用邮箱继续'按钮...")
+            
+            # 尝试多种选择器找到按钮
+            continue_btn = page.ele('tag:button@text():使用邮箱继续', timeout=3) or \
+                           page.ele('tag:button@text():Continue with email', timeout=2) or \
+                           page.ele('css:button[jsname="XooR8e"]', timeout=2) or \
+                           page.ele('#sign-in-with-email', timeout=2) or \
+                           page.ele('tag:button', timeout=2)
+            
+            if continue_btn:
+                try:
+                    continue_btn.click()
+                    log("   ✅ 已点击按钮")
+                except Exception as e:
+                    log(f"   普通点击失败，尝试 JS 点击...")
+                    try:
+                        continue_btn.click(by_js=True)
+                        log("   ✅ JS 点击成功")
+                    except:
+                        # 最后尝试回车
+                        email_input.input('\n')
+                        log("   尝试回车提交")
+            else:
+                # 没找到按钮，尝试回车
+                log("   未找到按钮，尝试回车提交...")
+                email_input.input('\n')
+            
+            time.sleep(4)  # 等待页面加载
+            page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
             # 检查是否遇到错误页面
-            if "请试试其他方法" in page_html or "Let's try something else" in page_html or "signin-error" in current_url:
+            page_html = page.html or ""
+            current_url = page.url or ""
+            
+            if "请试试其他方法" in page_html or "Let's try something else" in page_html or "格式不正确" in page_html:
                 log(f"   ⚠️ 遇到服务器错误，重试...")
                 page.get_screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
                 
@@ -360,40 +413,9 @@ def refresh_single_account(account):
                     if page:
                         page.quit()
                     return False, None
-                time.sleep(2)
-                continue
-            
-            # 查找并点击"通过电子邮件发送验证码"按钮
-            log("   查找发送验证码按钮...")
-            send_code_btn = page.ele('#sign-in-with-email', timeout=3) or \
-                            page.ele('tag:button@text():通过电子邮件发送验证码', timeout=2) or \
-                            page.ele('tag:button@text():Send verification code', timeout=2) or \
-                            page.ele('tag:button@text():使用邮箱继续', timeout=2) or \
-                            page.ele('tag:button@text():Continue with email', timeout=2)
-            
-            if send_code_btn:
-                log("   点击发送验证码按钮...")
-                try:
-                    send_code_btn.click()
-                except:
-                    send_code_btn.click(by_js=True)
+                
+                # 等待一下再重试
                 time.sleep(3)
-                page.get_screenshot(path=f"screenshots/{account_id}_02_after_send.png")
-            else:
-                # 如果没找到按钮，可能已经在验证码输入页面
-                log("   未找到发送按钮，检查是否已在验证码页面...")
-            
-            # 再次检查错误
-            page_html = page.html or ""
-            if "请试试其他方法" in page_html or "Let's try something else" in page_html:
-                log(f"   ⚠️ 点击后遇到服务器错误，重试...")
-                page.get_screenshot(path=f"screenshots/{account_id}_error_click_{attempt+1}.png")
-                if attempt >= max_retries - 1:
-                    log(f"   ❌ 重试 {max_retries} 次仍失败，跳过此账号")
-                    if page:
-                        page.quit()
-                    return False, None
-                time.sleep(2)
                 continue
             
             # 等待验证码输入框
