@@ -473,14 +473,17 @@ def refresh_single_account(account):
             if idx + 1 < len(path_parts):
                 config_id = path_parts[idx + 1]
         
-        # 从 Cookie 提取 secure_c_ses 和 host_c_oses
+        # 从 Cookie 提取 secure_c_ses、host_c_oses 和过期时间
         secure_c_ses = ""
         host_c_oses = ""
+        expires_timestamp = None
         for c in cookies:
             name = c.get('name', '')
             value = c.get('value', '')
             if name == '__Secure-C_SES':
                 secure_c_ses = value
+                # 读取 Cookie 的真实过期时间（与注册机一致）
+                expires_timestamp = c.get('expirationDate') or c.get('expiry')
             elif name == '__Host-C_OSES':
                 host_c_oses = value
         
@@ -490,6 +493,21 @@ def refresh_single_account(account):
                 page.quit()
             return False, None
         
+        # 计算过期时间（按照注册机方式）
+        if expires_timestamp:
+            try:
+                if isinstance(expires_timestamp, (int, float)):
+                    # 注册机公式：(ts - 43200) * 1000，这里反向计算
+                    exp_dt = datetime.fromtimestamp(expires_timestamp - 43200)
+                    expires_at = exp_dt.strftime("%Y-%m-%d %H:%M:%S")
+                    log(f"   [Cookie 过期时间] {expires_at}")
+                else:
+                    expires_at = (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
+            except:
+                expires_at = (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            expires_at = (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
+        
         # 构造新的账号数据
         new_account = {
             "id": email,
@@ -498,7 +516,7 @@ def refresh_single_account(account):
             "config_id": config_id or account.get('config_id', ''),
             "secure_c_ses": secure_c_ses,
             "host_c_oses": host_c_oses,
-            "expires_at": (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
+            "expires_at": expires_at
         }
         
         log("   ✅ 刷新成功！")
