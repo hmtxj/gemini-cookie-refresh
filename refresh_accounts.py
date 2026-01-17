@@ -454,10 +454,58 @@ def refresh_single_account(account):
         if not login_complete:
             log("   ⚠️ 登录状态不确定")
         
-        time.sleep(2)  # 额外等待确保页面加载完成
+        time.sleep(2)
+        
+        # 确保进入工作区（与注册机逻辑一致）
+        current_url = page.url or ""
+        got_cid = '/cid/' in current_url
+        
+        if not got_cid:
+            log("   等待 /cid/ URL...")
+            for _ in range(15):
+                current_url = page.url or ""
+                if '/cid/' in current_url:
+                    log(f"   ✅ 获取到 /cid/ URL")
+                    got_cid = True
+                    break
+                time.sleep(1)
+        
+        # 如果还没有 /cid/，尝试点击进入工作区
+        if not got_cid:
+            log("   尝试进入工作区...")
+            try:
+                enter_btn = page.ele('tag:button@text():开始', timeout=2) or \
+                            page.ele('tag:a@text():开始', timeout=1) or \
+                            page.ele('tag:button@text():Chat', timeout=1) or \
+                            page.ele('tag:a@text():Chat', timeout=1) or \
+                            page.ele('css:a[href*="/chat"]', timeout=1) or \
+                            page.ele('css:a[href*="/cid/"]', timeout=1)
+                if enter_btn:
+                    try:
+                        enter_btn.click()
+                    except:
+                        enter_btn.click(by_js=True)
+                    log("   ✅ 已点击进入按钮")
+                    time.sleep(5)
+                    current_url = page.url or ""
+            except Exception as e:
+                log(f"   ⚠️ 进入工作区失败: {e}")
+        
+        # 再次检查是否有 /cid/
+        if '/cid/' not in current_url:
+            log("   刷新页面重试...")
+            try:
+                page.refresh()
+                time.sleep(3)
+                current_url = page.url or ""
+            except:
+                pass
+        
+        # 最终等待确保 Cookie 完全刷新
+        time.sleep(3)
         
         # 提取 Cookie 和 URL 参数
-        current_url = page.url
+        current_url = page.url or ""
         cookies = page.cookies()
         
         # 从 URL 提取 csesidx 和 config_id
