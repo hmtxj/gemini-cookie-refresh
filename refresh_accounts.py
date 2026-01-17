@@ -541,12 +541,12 @@ def refresh_single_account(account):
                 page.quit()
             return False, None
         
-        # 计算过期时间（按照注册机方式）
+        # 计算过期时间
         if expires_timestamp:
             try:
                 if isinstance(expires_timestamp, (int, float)):
-                    # 注册机公式：(ts - 43200) * 1000，这里反向计算
-                    exp_dt = datetime.fromtimestamp(expires_timestamp - 43200)
+                    # 直接使用 Cookie 的过期时间戳
+                    exp_dt = datetime.fromtimestamp(expires_timestamp)
                     expires_at = exp_dt.strftime("%Y-%m-%d %H:%M:%S")
                     log(f"   [Cookie 过期时间] {expires_at}")
                 else:
