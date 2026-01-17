@@ -228,9 +228,10 @@ def wait_for_verification_code(email, token, timeout=180):
                         if not content:
                             return None
                         
-                        # 方法1: 匹配上下文关键词后的验证码（注册机的主要方法）
-                        pattern_context = r'(?:验证码|code|verification|passcode|pin|一次性)[^\d]*[:：]?\s*([A-Z0-9]{6})'
-                        match = re.search(pattern_context, content, re.IGNORECASE)
+                        # 方法1: 匹配上下文关键词后的验证码（支持换行）
+                        # 格式如："验证码是：\nUACMLF" 或 "code: 6P5USJ"
+                        pattern_context = r'(?:验证码|code|verification|passcode|pin|一次性).*?[:：是]?\s*\n?\s*([A-Z0-9]{6})\b'
+                        match = re.search(pattern_context, content, re.IGNORECASE | re.DOTALL)
                         if match:
                             code = match.group(1).upper()
                             # Gemini 验证码必须同时包含字母和数字
