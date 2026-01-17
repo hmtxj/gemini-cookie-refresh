@@ -299,7 +299,7 @@ def refresh_single_account(account):
             # 访问 Gemini Business
             log(f"   打开 Gemini Business... (尝试 {attempt + 1}/{max_retries})")
             page.get("https://business.gemini.google/", timeout=30)
-            time.sleep(5)  # 增加等待时间，确保页面完全加载
+            time.sleep(5)  # 等待页面完全加载（关键！）
             page.get_screenshot(path=f"screenshots/{account_id}_01_landing.png")
             
             # 输入邮箱
@@ -310,14 +310,12 @@ def refresh_single_account(account):
             if not email_input:
                 log("   ❌ 找不到邮箱输入框")
                 return False, None
-            
-            # 点击输入框，等待，输入邮箱
             email_input.click()
             time.sleep(0.5)
             email_input.clear()
             time.sleep(0.3)
             email_input.input(email)
-            time.sleep(1)  # 等待输入完成
+            time.sleep(1)
             
             # 触发 JavaScript 事件（关键！模拟真实用户输入）
             try:
@@ -337,26 +335,18 @@ def refresh_single_account(account):
             # 点击继续按钮
             log("   点击'使用邮箱继续'按钮...")
             continue_btn = page.ele('tag:button@text():使用邮箱继续', timeout=3) or \
-                           page.ele('tag:button@text():Continue with email', timeout=2) or \
-                           page.ele('css:button[jsname]', timeout=2) or \
+                           page.ele('tag:button@text():Continue with email', timeout=3) or \
                            page.ele('css:button', timeout=2)
-            
             if continue_btn:
                 try:
                     continue_btn.click()
                     log("   ✅ 已点击按钮")
                 except:
-                    try:
-                        continue_btn.click(by_js=True)
-                        log("   ✅ JS 点击成功")
-                    except:
-                        email_input.input('\n')
-                        log("   尝试回车提交")
+                    email_input.input('\n')
             else:
                 email_input.input('\n')
-                log("   未找到按钮，回车提交")
             
-            time.sleep(6)  # 等待页面加载（关键！不能太短）
+            time.sleep(8)  # 等待页面跳转（关键！必须足够长）
             page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
             # 检查是否遇到错误页面
@@ -371,7 +361,6 @@ def refresh_single_account(account):
                         page.quit()
                     return False, None
                 
-                # 等待后重试
                 time.sleep(3)
                 continue
             
