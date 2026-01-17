@@ -620,6 +620,9 @@ def refresh_all_accounts(force=False):
         success, new_account = refresh_single_account(account)
         if success and new_account:
             updated_accounts.append(new_account)
+            # 实时保存：每刷新成功一个就保存，中途取消也能保留进度
+            save_accounts(updated_accounts + accounts[i:])  # 已刷新 + 未刷新
+            log(f"   [已保存进度] {i}/{len(accounts)}")
         else:
             log(f"   保留原账号数据")
             updated_accounts.append(account)
@@ -627,7 +630,7 @@ def refresh_all_accounts(force=False):
         # 稍微等待，避免请求过快
         time.sleep(2)
     
-    # 保存更新后的账号
+    # 最终保存（确保完整性）
     save_accounts(updated_accounts)
 
 
