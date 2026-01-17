@@ -12,7 +12,11 @@ import json
 import os
 import time
 import requests
+import urllib3
 from datetime import datetime, timedelta
+
+# 禁用 SSL 警告（参考 https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings）
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # 配置
 ACCOUNTS_FILE = "accounts.json"
@@ -195,94 +199,40 @@ def wait_for_verification_code(email, token, timeout=180):
                         verify=False
                     )
                     data = detail.json()
-                    # 同时获取 text 和 html，都要检查
-                    # 注意：API 可能返回 list 类型，需要转换为字符串
-                    text_raw = data.get('text') or ""
-                    html_raw = data.get('html') or ""
-                    
-                    # 确保是字符串类型
-                    if isinstance(text_raw, list):
-                        text_content = ' '.join(str(x) for x in text_raw)
-                    else:
-                        text_content = str(text_raw) if text_raw else ""
-                    
-                    if isinstance(html_raw, list):
-                        html_content = ' '.join(str(x) for x in html_raw)
-                    else:
-                        html_content = str(html_raw) if html_raw else ""
-                    
+                    content = data.get('text') or data.get('html') or ""
                     subject = data.get('subject', '')
-                    if isinstance(subject, list):
-                        subject = ' '.join(str(x) for x in subject)
                     
                     if poll_count == 1:
                         log(f"   [邮件标题] {subject[:50]}...")
-                        log(f"   [text长度] {len(text_content)} 字符")
-                        log(f"   [html长度] {len(html_content)} 字符")
+                        log(f"   [邮件内容长度] {len(content)} 字符")
+                        # 打印邮件内容的前 200 个字符用于调试
+                        if content:
+                            log(f"   [邮件内容前200字符] {content[:200]}...")
                     
-                    # 提取验证码 - 按照注册机 mail_client.py 的逻辑
+                    # 提取验证码 - 多种方式尝试
                     import re
                     
-                    def extract_code_from_text(content):
-                        """从纯文本中提取验证码（参考注册机 mail_client.py）"""
-                        if not content:
-                            return None
-                        
-                        # 方法1: 匹配上下文关键词后的验证码（支持换行）
-                        # 格式如："验证码是：\nUACMLF" 或 "code: 6P5USJ"
-                        pattern_context = r'(?:验证码|code|verification|passcode|pin|一次性).*?[:：是]?\s*\n?\s*([A-Z0-9]{6})\b'
-                        match = re.search(pattern_context, content, re.IGNORECASE | re.DOTALL)
-                        if match:
-                            code = match.group(1).upper()
-                            # Gemini 验证码必须同时包含字母和数字
-                            if re.search(r'[A-Z]', code) and re.search(r'\d', code):
-                                return code
-                        
-                        # 方法2: 匹配独立的6位验证码（必须同时包含字母和数字）
-                        codes = re.findall(r'\b([A-Z0-9]{6})\b', content.upper())
-                        for code in codes:
-                            if re.search(r'[A-Z]', code) and re.search(r'\d', code):
-                                return code
-                        
-                        return None
+                    # 方式1: 严格匹配6位数字
+                    digits = re.findall(r'\b\d{6}\b', content)
+                    if digits:
+                        log(f"   ✅ 找到验证码: {digits[0]}")
+                        return digits[0]
                     
-                    def extract_code_from_html(content):
-                        """从 HTML 中提取验证码（更精准，避免匹配颜色代码）"""
-                        if not content:
-                            return None
-                        
-                        # 从 HTML 标签之间提取（>CODE<），这样可以避免匹配 #333333
-                        codes = re.findall(r'>([A-Z0-9]{6})<', content.upper())
-                        for code in codes:
-                            if re.search(r'[A-Z]', code) and re.search(r'\d', code):
-                                return code
-                        
-                        # 如果上面没找到，尝试匹配在特殊样式标签中的验证码
-                        # 如 <td style="...">7HXMRZ</td>
-                        matches = re.findall(r'<td[^>]*>([A-Z0-9]{6})</td>', content, re.IGNORECASE)
-                        for code in matches:
-                            code = code.upper()
-                            if re.search(r'[A-Z]', code) and re.search(r'\d', code):
-                                return code
-                        
-                        return None
+                    # 方式2: 匹配任意6位连续数字
+                    digits = re.findall(r'(\d{6})', content)
+                    if digits:
+                        log(f"   ✅ 找到验证码: {digits[0]}")
+                        return digits[0]
                     
-                    # 优先从 text 字段提取（纯文本，没有 HTML 颜色代码干扰）
-                    # 然后从 subject 提取，最后从 html 提取
-                    code = extract_code_from_text(text_content) or \
-                           extract_code_from_text(subject) or \
-                           extract_code_from_html(html_content)
+                    # 方式3: 从标题中提取
+                    digits = re.findall(r'(\d{6})', subject)
+                    if digits:
+                        log(f"   ✅ 从标题找到验证码: {digits[0]}")
+                        return digits[0]
                     
-                    if code:
-                        log(f"   ✅ 找到验证码: {code}")
-                        return code
-                    
-                    # 如果是第一次轮询且没找到，打印更多调试信息
+                    # 如果是第一次轮询且没找到，打印警告
                     if poll_count == 1:
                         log(f"   [警告] 邮件中未找到6位验证码")
-                        # 打印 text 内容用于调试（text 更干净）
-                        if text_content:
-                            log(f"   [text内容前300字符] {text_content[:300]}...")
             else:
                 if poll_count == 1:
                     log(f"   [轮询失败] HTTP {resp.status_code}")
@@ -324,19 +274,15 @@ def refresh_single_account(account):
         log("   ❌ 需要安装 DrissionPage: pip install DrissionPage")
         return False, None
     
-    # 随机 UA（与注册机保持一致）
-    import random
-    versions = ["120.0.0.0", "121.0.0.0", "122.0.0.0", "123.0.0.0", "124.0.0.0"]
-    random_ua = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{random.choice(versions)} Safari/537.36"
-    
-    # 配置浏览器（与注册机保持一致）
+    # 配置浏览器
     co = ChromiumOptions()
-    co.set_argument('--headless=new')  # 使用 headless=new 模式（注册机使用的模式）
+    # 不使用 headless 模式，让 Xvfb 虚拟显示器运行真实 GUI
+    # co.set_argument('--headless=new')
     co.set_argument('--incognito')
     if PROXY_URL:
         log(f"   使用代理: {PROXY_URL}")
         co.set_argument(f'--proxy-server={PROXY_URL}')
-    co.set_user_agent(random_ua)
+    co.set_user_agent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
     co.set_argument('--disable-blink-features=AutomationControlled')
     co.set_argument('--disable-gpu')
     co.set_argument('--no-sandbox')
@@ -353,13 +299,8 @@ def refresh_single_account(account):
         account_id = email.split("@")[0][:10]
         
         max_retries = 3
-        
         for attempt in range(max_retries):
-            # ============================================================
-            # 正确流程：首页输入邮箱 → 点击"使用邮箱继续"按钮 → 验证码页面
-            # 不能直接跳转 URL，否则会报"格式不正确"错误
-            # ============================================================
-            
+            # 访问 Gemini Business
             log(f"   打开 Gemini Business... (尝试 {attempt + 1}/{max_retries})")
             page.get("https://business.gemini.google/", timeout=30)
             time.sleep(3)
@@ -367,73 +308,32 @@ def refresh_single_account(account):
             
             # 输入邮箱
             log("   输入邮箱...")
-            email_input = page.ele('#email-input', timeout=5) or \
-                          page.ele('css:input[name="loginHint"]', timeout=3) or \
-                          page.ele('css:input[type="text"]', timeout=3) or \
-                          page.ele('css:input[type="email"]', timeout=3)
+            email_input = page.ele('#email-input', timeout=3) or \
+                          page.ele('css:input[name="loginHint"]', timeout=2) or \
+                          page.ele('css:input[type="text"]', timeout=2)
             if not email_input:
                 log("   ❌ 找不到邮箱输入框")
-                page.get_screenshot(path=f"screenshots/{account_id}_no_email_input.png")
-                if page:
-                    page.quit()
                 return False, None
-            
-            # 点击输入框并输入邮箱
             email_input.click()
-            time.sleep(0.5)
-            email_input.clear()
             time.sleep(0.3)
+            email_input.clear()
             email_input.input(email)
-            time.sleep(0.5)
-            
-            # 触发 JavaScript 事件
-            page.run_js('''
-                let el = document.querySelector("#email-input") || document.querySelector("input[type=email]") || document.querySelector("input[type=text]");
-                if(el) {
-                    el.dispatchEvent(new Event("input", {bubbles: true}));
-                    el.dispatchEvent(new Event("change", {bubbles: true}));
-                    el.dispatchEvent(new Event("blur", {bubbles: true}));
-                }
-            ''')
             time.sleep(0.5)
             page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
             
-            # 关键步骤：点击"使用邮箱继续"按钮
-            log("   点击'使用邮箱继续'按钮...")
-            
-            # 尝试多种选择器找到按钮
-            continue_btn = page.ele('tag:button@text():使用邮箱继续', timeout=3) or \
-                           page.ele('tag:button@text():Continue with email', timeout=2) or \
-                           page.ele('css:button[jsname="XooR8e"]', timeout=2) or \
-                           page.ele('#sign-in-with-email', timeout=2) or \
-                           page.ele('tag:button', timeout=2)
-            
+            # 点击继续按钮
+            continue_btn = page.ele('text:使用邮箱继续', timeout=2) or \
+                           page.ele('text:Continue with email', timeout=2) or \
+                           page.ele('css:button', timeout=2)
             if continue_btn:
-                try:
-                    continue_btn.click()
-                    log("   ✅ 已点击按钮")
-                except Exception as e:
-                    log(f"   普通点击失败，尝试 JS 点击...")
-                    try:
-                        continue_btn.click(by_js=True)
-                        log("   ✅ JS 点击成功")
-                    except:
-                        # 最后尝试回车
-                        email_input.input('\n')
-                        log("   尝试回车提交")
-            else:
-                # 没找到按钮，尝试回车
-                log("   未找到按钮，尝试回车提交...")
-                email_input.input('\n')
-            
-            time.sleep(6)  # 增加等待页面加载时间（从 4 秒增加到 6 秒）
+                continue_btn.click()
+            time.sleep(3)
             page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
             # 检查是否遇到错误页面
-            page_html = page.html or ""
-            current_url = page.url or ""
-            
-            if "请试试其他方法" in page_html or "Let's try something else" in page_html or "格式不正确" in page_html:
+            error_elem = page.ele('text:请试试其他方法', timeout=2) or \
+                         page.ele('text:Let\'s try something else', timeout=2)
+            if error_elem:
                 log(f"   ⚠️ 遇到服务器错误，重试...")
                 page.get_screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
                 
@@ -443,22 +343,22 @@ def refresh_single_account(account):
                         page.quit()
                     return False, None
                 
-                # 等待一下再重试
-                time.sleep(3)
+                # 点击重试按钮
+                retry_btn = page.ele('text:注册或登录', timeout=2) or \
+                            page.ele('text:Sign up or sign in', timeout=2)
+                if retry_btn:
+                    retry_btn.click()
+                    time.sleep(2)
                 continue
             
             # 等待验证码输入框
             log("   等待验证码输入框... (最长 30 秒)")
             code_input = None
-            for i in range(30):
+            for _ in range(30):
                 code_input = page.ele('css:input[name="pinInput"]', timeout=1) or \
-                             page.ele('css:input[type="tel"]', timeout=1) or \
-                             page.ele('css:input[jsname="ovqh0b"]', timeout=1)
+                             page.ele('css:input[type="tel"]', timeout=1)
                 if code_input:
-                    log(f"   ✅ 找到验证码输入框")
                     break
-                if i == 10:
-                    log(f"   仍在等待验证码输入框...")
                 time.sleep(1)
             
             if code_input:
@@ -469,7 +369,6 @@ def refresh_single_account(account):
                     continue
                 else:
                     log(f"   ❌ 验证码输入框始终未出现")
-                    page.get_screenshot(path=f"screenshots/{account_id}_no_code_input.png")
                     if page:
                         page.quit()
                     return False, None
@@ -483,81 +382,31 @@ def refresh_single_account(account):
         
         # 输入验证码
         log("   输入验证码...")
-        page.get_screenshot(path=f"screenshots/{account_id}_04_before_code.png")
         code_input.click()
-        time.sleep(0.5)  # 增加等待
         code_input.clear()
-        time.sleep(0.3)
         code_input.input(code)
-        time.sleep(0.5)  # 增加等待
-        # 触发 JavaScript 事件
-        try:
-            page.run_js('''
-                let el = document.querySelector("input[name=pinInput]") || document.querySelector("input[type=tel]");
-                if(el) {
-                    el.dispatchEvent(new Event("input", {bubbles: true}));
-                    el.dispatchEvent(new Event("change", {bubbles: true}));
-                }
-            ''')
-        except:
-            pass
         time.sleep(0.5)
-        page.get_screenshot(path=f"screenshots/{account_id}_05_code_entered.png")
         
         # 点击验证按钮
-        log("   点击验证按钮...")
-        verify_btn = page.ele('tag:button@text():验证', timeout=3) or \
-                     page.ele('tag:button@text():Verify', timeout=2)
-        if verify_btn:
-            verify_btn.click()
-        else:
-            # 尝试找其他按钮
-            buttons = page.eles('css:button')
-            for btn in buttons:
-                btn_text = btn.text or ""
-                if "重新" not in btn_text and "发送" not in btn_text and btn_text.strip():
-                    btn.click()
-                    break
+        buttons = page.eles('css:button')
+        for btn in buttons:
+            btn_text = btn.text or ""
+            if "重新" not in btn_text and "发送" not in btn_text:
+                btn.click()
+                break
         
-        time.sleep(3)  # 等待请求发送
-        page.get_screenshot(path=f"screenshots/{account_id}_06_after_verify.png")
-        
-        # 等待登录完成 - 增加等待时间和更多检测
+        # 等待登录完成
         log("   等待登录完成...")
-        login_success = False
-        for i in range(40):  # 增加到 40 秒
+        for _ in range(30):
             time.sleep(1)
-            current_url = page.url or ""
-            page_html = page.html or ""
+            page_text = page.html
+            current_url = page.url
             
-            # 检测是否正在加载
-            if "正在登录" in page_html or "Signing in" in page_html or "loading" in page_html.lower():
-                if i == 10:
-                    log("   仍在等待登录完成...")
+            if "正在登录" in page_text or "Signing in" in page_text:
                 continue
             
-            # 检测成功：URL 包含 /cid/ 或 /home/ 或页面包含关键元素
-            if '/cid/' in current_url or '/home/' in current_url:
-                log(f"   ✅ 检测到登录成功，URL: {current_url[:80]}...")
-                login_success = True
+            if '/cid/' in current_url or "免费试用" in page_text:
                 break
-            
-            # 检测成功：页面包含 Gemini Enterprise 相关内容
-            if "Gemini Enterprise" in page_html or "免费试用" in page_html or "新对话" in page_html:
-                log("   ✅ 检测到主页面内容")
-                login_success = True
-                break
-            
-            # 检测验证码错误
-            if "验证码无效" in page_html or "Invalid code" in page_html or "incorrect" in page_html.lower():
-                log("   ❌ 验证码无效")
-                page.get_screenshot(path=f"screenshots/{account_id}_error_invalid_code.png")
-                break
-        
-        page.get_screenshot(path=f"screenshots/{account_id}_07_final_state.png")
-        
-        if not login_success:
-            log(f"   ⚠️ 登录状态不确定，当前 URL: {current_url[:80]}...")
         
         # 提取 Cookie 和 URL 参数
         current_url = page.url
@@ -589,10 +438,6 @@ def refresh_single_account(account):
         
         if not secure_c_ses or not csesidx:
             log("   ❌ 无法提取必要信息")
-            log(f"   [调试] secure_c_ses: {bool(secure_c_ses)}, csesidx: {bool(csesidx)}, config_id: {bool(config_id)}")
-            log(f"   [调试] 当前URL: {current_url[:100]}...")
-            log(f"   [调试] Cookie数量: {len(cookies)}")
-            page.get_screenshot(path=f"screenshots/{account_id}_error_no_info.png")
             if page:
                 page.quit()
             return False, None
