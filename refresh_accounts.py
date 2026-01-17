@@ -541,17 +541,22 @@ def refresh_single_account(account):
                 page.quit()
             return False, None
         
-        # 计算过期时间
+        # 计算过期时间（转换为北京时间）
         if expires_timestamp:
             try:
                 if isinstance(expires_timestamp, (int, float)):
-                    # 直接使用 Cookie 的过期时间戳
-                    exp_dt = datetime.fromtimestamp(expires_timestamp)
-                    expires_at = exp_dt.strftime("%Y-%m-%d %H:%M:%S")
-                    log(f"   [Cookie 过期时间] {expires_at}")
+                    # Cookie 的过期时间戳是 UTC，转换为北京时间（+8小时）
+                    from datetime import timezone
+                    utc_dt = datetime.fromtimestamp(expires_timestamp, tz=timezone.utc)
+                    beijing_tz = timezone(timedelta(hours=8))
+                    beijing_dt = utc_dt.astimezone(beijing_tz)
+                    expires_at = beijing_dt.strftime("%Y-%m-%d %H:%M:%S")
+                    log(f"   [Cookie 过期时间-北京] {expires_at}")
                 else:
-                    expires_at = (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
-            except:
+                    beijing_tz = timezone(timedelta(hours=8))
+                    expires_at = datetime.now(beijing_tz).strftime("%Y-%m-%d %H:%M:%S")
+            except Exception as e:
+                log(f"   [时间转换错误] {e}")
                 expires_at = (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
         else:
             expires_at = (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
