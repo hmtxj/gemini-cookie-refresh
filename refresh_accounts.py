@@ -12,7 +12,11 @@ import json
 import os
 import time
 import requests
+import urllib3
 from datetime import datetime, timedelta
+
+# 禁用 SSL 警告（避免日志刷屏）
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # 配置
 ACCOUNTS_FILE = "accounts.json"
