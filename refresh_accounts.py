@@ -454,58 +454,10 @@ def refresh_single_account(account):
         if not login_complete:
             log("   ⚠️ 登录状态不确定")
         
-        time.sleep(2)
-        
-        # 确保进入工作区（与注册机逻辑一致）
-        current_url = page.url or ""
-        got_cid = '/cid/' in current_url
-        
-        if not got_cid:
-            log("   等待 /cid/ URL...")
-            for _ in range(15):
-                current_url = page.url or ""
-                if '/cid/' in current_url:
-                    log(f"   ✅ 获取到 /cid/ URL")
-                    got_cid = True
-                    break
-                time.sleep(1)
-        
-        # 如果还没有 /cid/，尝试点击进入工作区
-        if not got_cid:
-            log("   尝试进入工作区...")
-            try:
-                enter_btn = page.ele('tag:button@text():开始', timeout=2) or \
-                            page.ele('tag:a@text():开始', timeout=1) or \
-                            page.ele('tag:button@text():Chat', timeout=1) or \
-                            page.ele('tag:a@text():Chat', timeout=1) or \
-                            page.ele('css:a[href*="/chat"]', timeout=1) or \
-                            page.ele('css:a[href*="/cid/"]', timeout=1)
-                if enter_btn:
-                    try:
-                        enter_btn.click()
-                    except:
-                        enter_btn.click(by_js=True)
-                    log("   ✅ 已点击进入按钮")
-                    time.sleep(5)
-                    current_url = page.url or ""
-            except Exception as e:
-                log(f"   ⚠️ 进入工作区失败: {e}")
-        
-        # 再次检查是否有 /cid/
-        if '/cid/' not in current_url:
-            log("   刷新页面重试...")
-            try:
-                page.refresh()
-                time.sleep(3)
-                current_url = page.url or ""
-            except:
-                pass
-        
-        # 最终等待确保 Cookie 完全刷新
-        time.sleep(3)
+        time.sleep(2)  # 额外等待确保页面加载完成
         
         # 提取 Cookie 和 URL 参数
-        current_url = page.url or ""
+        current_url = page.url
         cookies = page.cookies()
         
         # 从 URL 提取 csesidx 和 config_id
@@ -521,17 +473,14 @@ def refresh_single_account(account):
             if idx + 1 < len(path_parts):
                 config_id = path_parts[idx + 1]
         
-        # 从 Cookie 提取 secure_c_ses、host_c_oses 和过期时间
+        # 从 Cookie 提取 secure_c_ses 和 host_c_oses
         secure_c_ses = ""
         host_c_oses = ""
-        expires_timestamp = None
         for c in cookies:
             name = c.get('name', '')
             value = c.get('value', '')
             if name == '__Secure-C_SES':
                 secure_c_ses = value
-                # 读取 Cookie 的真实过期时间（与注册机一致）
-                expires_timestamp = c.get('expirationDate') or c.get('expiry')
             elif name == '__Host-C_OSES':
                 host_c_oses = value
         
@@ -541,26 +490,6 @@ def refresh_single_account(account):
                 page.quit()
             return False, None
         
-        # 计算过期时间（转换为北京时间）
-        if expires_timestamp:
-            try:
-                if isinstance(expires_timestamp, (int, float)):
-                    # Cookie 的过期时间戳是 UTC，转换为北京时间（+8小时）
-                    from datetime import timezone
-                    utc_dt = datetime.fromtimestamp(expires_timestamp, tz=timezone.utc)
-                    beijing_tz = timezone(timedelta(hours=8))
-                    beijing_dt = utc_dt.astimezone(beijing_tz)
-                    expires_at = beijing_dt.strftime("%Y-%m-%d %H:%M:%S")
-                    log(f"   [Cookie 过期时间-北京] {expires_at}")
-                else:
-                    beijing_tz = timezone(timedelta(hours=8))
-                    expires_at = datetime.now(beijing_tz).strftime("%Y-%m-%d %H:%M:%S")
-            except Exception as e:
-                log(f"   [时间转换错误] {e}")
-                expires_at = (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
-        else:
-            expires_at = (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
-        
         # 构造新的账号数据
         new_account = {
             "id": email,
@@ -569,7 +498,7 @@ def refresh_single_account(account):
             "config_id": config_id or account.get('config_id', ''),
             "secure_c_ses": secure_c_ses,
             "host_c_oses": host_c_oses,
-            "expires_at": expires_at
+            "expires_at": (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
         }
         
         log("   ✅ 刷新成功！")
@@ -620,9 +549,6 @@ def refresh_all_accounts(force=False):
         success, new_account = refresh_single_account(account)
         if success and new_account:
             updated_accounts.append(new_account)
-            # 实时保存：每刷新成功一个就保存，中途取消也能保留进度
-            save_accounts(updated_accounts + accounts[i:])  # 已刷新 + 未刷新
-            log(f"   [已保存进度] {i}/{len(accounts)}")
         else:
             log(f"   保留原账号数据")
             updated_accounts.append(account)
@@ -630,7 +556,7 @@ def refresh_all_accounts(force=False):
         # 稍微等待，避免请求过快
         time.sleep(2)
     
-    # 最终保存（确保完整性）
+    # 保存更新后的账号
     save_accounts(updated_accounts)
 
 
