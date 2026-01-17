@@ -213,14 +213,14 @@ def wait_for_verification_code(email, token, timeout=180):
                     import re
                     
                     # 方式1: 匹配上下文关键词后的验证码（字母+数字 4-8 位）
-                    pattern_context = r'(?:验证码|code|verification|passcode|pin|一次性).*?[:：是]?\s*([A-Za-z0-9]{4,8})\b'
+                    pattern_context = r'(?:验证码|code|verification|passcode|pin).*?[:：]\s*([A-Za-z0-9]{4,8})\b'
                     match = re.search(pattern_context, content, re.IGNORECASE | re.DOTALL)
                     if match:
                         code = match.group(1).upper()
                         log(f"   ✅ 找到验证码: {code}")
                         return code
                     
-                    # 方式2: 严格匹配6位纯数字（兜底）
+                    # 方式2: 纯数字兜底（与注册机一致）
                     digits = re.findall(r'\b\d{6}\b', content)
                     if digits:
                         log(f"   ✅ 找到验证码: {digits[0]}")
