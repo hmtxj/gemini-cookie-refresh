@@ -12,11 +12,7 @@ import json
 import os
 import time
 import requests
-import urllib3
 from datetime import datetime, timedelta
-
-# 禁用 SSL 警告（参考 https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings）
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # 配置
 ACCOUNTS_FILE = "accounts.json"
@@ -303,37 +299,69 @@ def refresh_single_account(account):
             # 访问 Gemini Business
             log(f"   打开 Gemini Business... (尝试 {attempt + 1}/{max_retries})")
             page.get("https://business.gemini.google/", timeout=30)
-            time.sleep(3)
+            time.sleep(5)  # 增加等待时间，确保页面完全加载
             page.get_screenshot(path=f"screenshots/{account_id}_01_landing.png")
             
             # 输入邮箱
             log("   输入邮箱...")
-            email_input = page.ele('#email-input', timeout=3) or \
-                          page.ele('css:input[name="loginHint"]', timeout=2) or \
-                          page.ele('css:input[type="text"]', timeout=2)
+            email_input = page.ele('#email-input', timeout=5) or \
+                          page.ele('css:input[name="loginHint"]', timeout=3) or \
+                          page.ele('css:input[type="text"]', timeout=3)
             if not email_input:
                 log("   ❌ 找不到邮箱输入框")
                 return False, None
+            
+            # 点击输入框，等待，输入邮箱
             email_input.click()
-            time.sleep(0.3)
-            email_input.clear()
-            email_input.input(email)
             time.sleep(0.5)
+            email_input.clear()
+            time.sleep(0.3)
+            email_input.input(email)
+            time.sleep(1)  # 等待输入完成
+            
+            # 触发 JavaScript 事件（关键！模拟真实用户输入）
+            try:
+                page.run_js('''
+                    let el = document.querySelector("#email-input") || document.querySelector("input[type=text]");
+                    if(el) {
+                        el.dispatchEvent(new Event("input", {bubbles: true}));
+                        el.dispatchEvent(new Event("change", {bubbles: true}));
+                        el.dispatchEvent(new Event("blur", {bubbles: true}));
+                    }
+                ''')
+            except:
+                pass
+            time.sleep(1)
             page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
             
             # 点击继续按钮
-            continue_btn = page.ele('text:使用邮箱继续', timeout=2) or \
-                           page.ele('text:Continue with email', timeout=2) or \
+            log("   点击'使用邮箱继续'按钮...")
+            continue_btn = page.ele('tag:button@text():使用邮箱继续', timeout=3) or \
+                           page.ele('tag:button@text():Continue with email', timeout=2) or \
+                           page.ele('css:button[jsname]', timeout=2) or \
                            page.ele('css:button', timeout=2)
+            
             if continue_btn:
-                continue_btn.click()
-            time.sleep(3)
+                try:
+                    continue_btn.click()
+                    log("   ✅ 已点击按钮")
+                except:
+                    try:
+                        continue_btn.click(by_js=True)
+                        log("   ✅ JS 点击成功")
+                    except:
+                        email_input.input('\n')
+                        log("   尝试回车提交")
+            else:
+                email_input.input('\n')
+                log("   未找到按钮，回车提交")
+            
+            time.sleep(6)  # 等待页面加载（关键！不能太短）
             page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
             # 检查是否遇到错误页面
-            error_elem = page.ele('text:请试试其他方法', timeout=2) or \
-                         page.ele('text:Let\'s try something else', timeout=2)
-            if error_elem:
+            page_html = page.html or ""
+            if "请试试其他方法" in page_html or "Let's try something else" in page_html:
                 log(f"   ⚠️ 遇到服务器错误，重试...")
                 page.get_screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
                 
@@ -343,12 +371,8 @@ def refresh_single_account(account):
                         page.quit()
                     return False, None
                 
-                # 点击重试按钮
-                retry_btn = page.ele('text:注册或登录', timeout=2) or \
-                            page.ele('text:Sign up or sign in', timeout=2)
-                if retry_btn:
-                    retry_btn.click()
-                    time.sleep(2)
+                # 等待后重试
+                time.sleep(3)
                 continue
             
             # 等待验证码输入框
