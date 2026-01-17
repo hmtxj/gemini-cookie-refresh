@@ -226,18 +226,23 @@ def wait_for_verification_code(email, token, timeout=180):
                     def extract_code(content):
                         if not content:
                             return None
-                        # 方式1: 优先匹配6位纯数字（最可靠）
-                        digits = re.findall(r'\b(\d{6})\b', content)
-                        if digits:
-                            return digits[0]
-                        # 方式2: 匹配连续6位数字（不要求边界）
-                        digits = re.findall(r'(\d{6})', content)
-                        if digits:
-                            return digits[0]
-                        # 方式3: 匹配上下文关键词后跟6位数字
-                        pattern_context = r'(?:验证码|code|verification|passcode|pin)[^\d]*(\d{6})'
-                        match = re.search(pattern_context, content, re.IGNORECASE)
-                        if match:
+                        # Gemini 验证码格式：6位大写字母+数字混合，如 7HXMRZ
+                        # 方式1: 匹配独立的6位大写字母数字组合
+                        codes = re.findall(r'\b([A-Z0-9]{6})\b', content)
+                        # 过滤掉纯字母单词（如 "Google"）
+                        for code in codes:
+                            if re.search(r'\d', code):  # 必须包含至少一个数字
+                                return code
+                        # 方式2: 匹配任意6位大写字母数字（放宽边界）
+                        codes = re.findall(r'([A-Z0-9]{6})', content)
+                        for code in codes:
+                            if re.search(r'\d', code):  # 必须包含至少一个数字
+                                return code
+                        # 方式3: 从 HTML 中提取（验证码通常在特殊样式中）
+                        # 匹配类似 <td>7HXMRZ</td> 或独立行的验证码
+                        pattern = r'>([A-Z0-9]{6})<'
+                        match = re.search(pattern, content)
+                        if match and re.search(r'\d', match.group(1)):
                             return match.group(1)
                         return None
                     
