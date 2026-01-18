@@ -311,17 +311,26 @@ def refresh_single_account(account):
                     continue
                 return False, None
             
-            time.sleep(2)  # 页面加载后额外等待
+            # 🔥 页面加载后额外等待（随机 3-5 秒，模拟人类阅读页面）
+            import random
+            wait_time = random.uniform(3, 5)
+            log(f"   页面已加载，等待 {wait_time:.1f} 秒...")
+            time.sleep(wait_time)
             page.get_screenshot(path=f"screenshots/{account_id}_01_landing.png")
             
-            # 输入邮箱
+            # 输入邮箱（模拟人类操作：先点击，等待，再输入）
             log("   输入邮箱...")
             email_input.click()
-            time.sleep(0.5)
+            time.sleep(random.uniform(0.8, 1.5))  # 随机延迟
             email_input.clear()
-            time.sleep(0.3)
-            email_input.input(email)
-            time.sleep(1)
+            time.sleep(random.uniform(0.3, 0.6))
+            
+            # 🔥 逐字符输入邮箱（模拟人类打字，每个字符间隔 50-150ms）
+            for char in email:
+                email_input.input(char)
+                time.sleep(random.uniform(0.05, 0.15))
+            
+            time.sleep(random.uniform(1, 2))  # 输入完成后等待
             
             # 触发 JavaScript 事件（模拟真实用户输入）
             try:
@@ -335,13 +344,13 @@ def refresh_single_account(account):
                 ''')
             except:
                 pass
-            time.sleep(1)
+            time.sleep(random.uniform(1, 2))
             page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
             
             # 🔥 等待"使用邮箱继续"按钮可点击
             log("   等待按钮可点击...")
             continue_btn = None
-            for wait_count in range(10):  # 最多等待 10 秒
+            for wait_count in range(15):  # 最多等待 15 秒
                 # 优先使用精确的 ID 选择器
                 continue_btn = page.ele('#log-in-button', timeout=1) or \
                                page.ele('css:button[type="submit"]', timeout=0.5) or \
@@ -351,15 +360,37 @@ def refresh_single_account(account):
                     break
                 time.sleep(1)
             
-            # 🔥 模拟人类点击按钮（使用原生 click，不用 JS）
+            # 🔥 模拟人类点击按钮（鼠标悬停 -> 等待 -> 点击）
             log("   点击'使用邮箱继续'按钮...")
             if continue_btn:
                 try:
-                    # 先滚动到按钮可见位置
+                    # 1. 滚动到按钮可见位置
                     page.run_js('arguments[0].scrollIntoView({block: "center"});', continue_btn)
-                    time.sleep(0.5)
-                    # 使用原生点击（模拟人类操作）
-                    continue_btn.click()
+                    time.sleep(random.uniform(0.5, 1))
+                    
+                    # 2. 模拟鼠标悬停在按钮上（触发 hover 事件）
+                    try:
+                        page.run_js('''
+                            arguments[0].dispatchEvent(new MouseEvent("mouseenter", {bubbles: true}));
+                            arguments[0].dispatchEvent(new MouseEvent("mouseover", {bubbles: true}));
+                        ''', continue_btn)
+                    except:
+                        pass
+                    time.sleep(random.uniform(0.8, 1.5))  # 悬停后等待
+                    
+                    # 3. 模拟鼠标按下和抬起（更接近真实点击）
+                    try:
+                        page.run_js('''
+                            arguments[0].dispatchEvent(new MouseEvent("mousedown", {bubbles: true}));
+                        ''', continue_btn)
+                        time.sleep(random.uniform(0.05, 0.1))
+                        page.run_js('''
+                            arguments[0].dispatchEvent(new MouseEvent("mouseup", {bubbles: true}));
+                            arguments[0].click();
+                        ''', continue_btn)
+                    except:
+                        continue_btn.click()
+                    
                     log("   ✅ 已点击按钮")
                 except Exception as e:
                     log(f"   ⚠️ 点击异常: {e}，尝试回车提交")
@@ -370,13 +401,14 @@ def refresh_single_account(account):
             
             # 🔥 等待页面跳转（智能等待：检测页面变化）
             log("   等待页面响应...")
-            time.sleep(3)  # 先等待 3 秒让页面开始加载
+            time.sleep(random.uniform(4, 6))  # 先等待 4-6 秒让页面开始加载
             
-            # 智能等待：每 2 秒检测一次页面状态，最多等待 20 秒
-            for wait_count in range(10):
+            # 智能等待：每 2 秒检测一次页面状态，最多等待 30 秒
+            for wait_count in range(15):
                 time.sleep(2)
                 current_url = page.url or ""
                 page_html = page.html or ""
+
                 
                 # 检查是否已跳转到验证码页面
                 if "pinInput" in page_html or "verify" in current_url.lower():
