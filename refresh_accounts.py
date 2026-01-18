@@ -754,8 +754,18 @@ def refresh_all_accounts(force=False):
             log(f"   保留原账号数据")
             updated_accounts.append(account)
         
-        # 稍微等待，避免请求过快
-        time.sleep(2)
+        # 🔥 增加账号间隔，避免触发 Google 限流
+        if i < len(accounts):  # 不是最后一个账号
+            # 每 10 个账号输出批次提示
+            if i % 10 == 0:
+                log(f"\n⏸️ 已完成 {i} 个账号，休息 60 秒后继续...")
+                time.sleep(60)
+            else:
+                # 随机等待 45-90 秒
+                import random
+                wait_time = random.uniform(45, 90)
+                log(f"   💤 等待 {wait_time:.0f} 秒后继续下一个账号...")
+                time.sleep(wait_time)
     
     # 保存更新后的账号
     save_accounts(updated_accounts)
