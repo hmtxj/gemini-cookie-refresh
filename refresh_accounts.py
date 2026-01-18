@@ -232,14 +232,37 @@ def wait_for_verification_code(email, token, timeout=180):
                         if content:
                             log(f"   [邮件内容前200字符] {content[:200]}...")
                     
-                    # 提取验证码 - Gemini 验证码是字母+数字混合（如 7HXMRZ）
+                    # 提取验证码 - Gemini 验证码固定是 6 位大写字母+数字
                     import re
                     
-                    # 匹配上下文关键词后的验证码（字母+数字 4-8 位）
-                    pattern_context = r'(?:验证码|code|verification|passcode|pin).*?[:：]?\s*([A-Za-z0-9]{4,8})\b'
-                    match = re.search(pattern_context, content, re.IGNORECASE | re.DOTALL)
-                    if match:
-                        code = match.group(1).upper()
+                    code = None
+                    
+                    # 方法 1: 从 HTML 中提取 (最精确 - 匹配 verification 相关的 span/class)
+                    html_pattern = r'class=["\']verification[^"\']*["\'][^>]*>([A-Z0-9]{6})<'
+                    html_match = re.search(html_pattern, content, re.IGNORECASE)
+                    if html_match:
+                        code = html_match.group(1).upper()
+                    
+                    # 方法 2: 匹配独立行上的 6 位验证码 (中英文邮件都适用)
+                    if not code:
+                        # 验证码通常在"验证码为："或"code is"后的独立行
+                        line_pattern = r'(?:验证码[为是]?[:：]?|code\s+is[:：]?)\s*\n?\s*([A-Z0-9]{6})\b'
+                        line_match = re.search(line_pattern, content, re.IGNORECASE)
+                        if line_match:
+                            code = line_match.group(1).upper()
+                    
+                    # 方法 3: 直接匹配任意独立的 6 位大写字母数字组合 (fallback)
+                    if not code:
+                        # 匹配被空白/换行包围的 6 位验证码
+                        standalone_pattern = r'(?:^|\s)([A-Z0-9]{6})(?:\s|$)'
+                        for match in re.finditer(standalone_pattern, content):
+                            potential_code = match.group(1).upper()
+                            # 排除常见非验证码词汇
+                            if potential_code not in ['GEMINI', 'GOOGLE', 'BUSINE', 'ENTERP']:
+                                code = potential_code
+                                break
+                    
+                    if code:
                         log(f"   ✅ 找到验证码: {code}")
                         return code
                     
