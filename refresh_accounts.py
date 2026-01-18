@@ -293,17 +293,29 @@ def refresh_single_account(account):
             # 访问 Gemini Business
             log(f"   打开 Gemini Business... (尝试 {attempt + 1}/{max_retries})")
             page.get("https://business.gemini.google/", timeout=30)
-            time.sleep(5)  # 等待页面完全加载（关键！）
+            
+            # 🔥 等待页面完全加载（智能等待：检测邮箱输入框出现）
+            log("   等待页面加载...")
+            email_input = None
+            for wait_count in range(20):  # 最多等待 20 秒
+                email_input = page.ele('#email-input', timeout=1) or \
+                              page.ele('css:input[name="loginHint"]', timeout=0.5) or \
+                              page.ele('css:input[type="text"]', timeout=0.5)
+                if email_input:
+                    break
+                time.sleep(1)
+            
+            if not email_input:
+                log("   ❌ 页面加载超时，找不到邮箱输入框")
+                if attempt < max_retries - 1:
+                    continue
+                return False, None
+            
+            time.sleep(2)  # 页面加载后额外等待
             page.get_screenshot(path=f"screenshots/{account_id}_01_landing.png")
             
             # 输入邮箱
             log("   输入邮箱...")
-            email_input = page.ele('#email-input', timeout=5) or \
-                          page.ele('css:input[name="loginHint"]', timeout=3) or \
-                          page.ele('css:input[type="text"]', timeout=3)
-            if not email_input:
-                log("   ❌ 找不到邮箱输入框")
-                return False, None
             email_input.click()
             time.sleep(0.5)
             email_input.clear()
@@ -311,7 +323,7 @@ def refresh_single_account(account):
             email_input.input(email)
             time.sleep(1)
             
-            # 触发 JavaScript 事件（关键！模拟真实用户输入）
+            # 触发 JavaScript 事件（模拟真实用户输入）
             try:
                 page.run_js('''
                     let el = document.querySelector("#email-input") || document.querySelector("input[type=text]");
@@ -326,21 +338,59 @@ def refresh_single_account(account):
             time.sleep(1)
             page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
             
-            # 点击继续按钮
+            # 🔥 等待"使用邮箱继续"按钮可点击
+            log("   等待按钮可点击...")
+            continue_btn = None
+            for wait_count in range(10):  # 最多等待 10 秒
+                # 优先使用精确的 ID 选择器
+                continue_btn = page.ele('#log-in-button', timeout=1) or \
+                               page.ele('css:button[type="submit"]', timeout=0.5) or \
+                               page.ele('tag:button@text():使用邮箱继续', timeout=0.5) or \
+                               page.ele('tag:button@text():Continue with email', timeout=0.5)
+                if continue_btn:
+                    break
+                time.sleep(1)
+            
+            # 🔥 模拟人类点击按钮（使用原生 click，不用 JS）
             log("   点击'使用邮箱继续'按钮...")
-            continue_btn = page.ele('tag:button@text():使用邮箱继续', timeout=3) or \
-                           page.ele('tag:button@text():Continue with email', timeout=3) or \
-                           page.ele('css:button', timeout=2)
             if continue_btn:
                 try:
+                    # 先滚动到按钮可见位置
+                    page.run_js('arguments[0].scrollIntoView({block: "center"});', continue_btn)
+                    time.sleep(0.5)
+                    # 使用原生点击（模拟人类操作）
                     continue_btn.click()
                     log("   ✅ 已点击按钮")
-                except:
+                except Exception as e:
+                    log(f"   ⚠️ 点击异常: {e}，尝试回车提交")
                     email_input.input('\n')
             else:
+                log("   ⚠️ 找不到按钮，尝试回车提交")
                 email_input.input('\n')
             
-            time.sleep(12)  # 等待页面跳转（关键！增加等待减少服务器错误）
+            # 🔥 等待页面跳转（智能等待：检测页面变化）
+            log("   等待页面响应...")
+            time.sleep(3)  # 先等待 3 秒让页面开始加载
+            
+            # 智能等待：每 2 秒检测一次页面状态，最多等待 20 秒
+            for wait_count in range(10):
+                time.sleep(2)
+                current_url = page.url or ""
+                page_html = page.html or ""
+                
+                # 检查是否已跳转到验证码页面
+                if "pinInput" in page_html or "verify" in current_url.lower():
+                    log("   ✅ 检测到验证码页面")
+                    break
+                
+                # 检查是否遇到错误页面
+                if "请试试其他方法" in page_html or "Let's try something else" in page_html:
+                    break  # 跳出等待，进入错误处理
+                
+                # 检查是否还在加载中
+                if "加载" in page_html or "loading" in page_html.lower():
+                    continue  # 继续等待
+            
             page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
             # 检查是否遇到错误页面
