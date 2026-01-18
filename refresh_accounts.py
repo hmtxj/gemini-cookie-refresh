@@ -173,8 +173,9 @@ def wait_for_verification_code(email, token, timeout=180):
     start_time = time.time()
     
     # 🔥 记录开始等待的 UTC 时间（用于过滤旧邮件）
-    from datetime import datetime, timezone
-    wait_start_utc = datetime.now(timezone.utc)
+    # 往前倒退 30 秒，避免因网络延迟导致新邮件被误判为旧邮件
+    from datetime import datetime, timezone, timedelta
+    wait_start_utc = datetime.now(timezone.utc) - timedelta(seconds=30)
     log(f"   等待验证码... (最长 {timeout} 秒，过滤 {wait_start_utc.strftime('%H:%M:%S')} UTC 之后的邮件)")
     
     poll_count = 0
