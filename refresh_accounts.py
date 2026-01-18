@@ -167,12 +167,15 @@ def duckmail_login(email, password):
 
 
 def wait_for_verification_code(email, token, timeout=180):
-    """从 DuckMail 等待验证码"""
+    """从 DuckMail 等待验证码（带时间戳过滤）"""
     proxies = {"http": PROXY_URL, "https": PROXY_URL} if PROXY_URL else None
     headers = {"Authorization": f"Bearer {token}"}
     start_time = time.time()
     
-    log(f"   等待验证码... (最长 {timeout} 秒)")
+    # 🔥 记录开始等待的 UTC 时间（用于过滤旧邮件）
+    from datetime import datetime, timezone
+    wait_start_utc = datetime.now(timezone.utc)
+    log(f"   等待验证码... (最长 {timeout} 秒，过滤 {wait_start_utc.strftime('%H:%M:%S')} UTC 之后的邮件)")
     
     poll_count = 0
     while (time.time() - start_time) < timeout:
@@ -189,8 +192,25 @@ def wait_for_verification_code(email, token, timeout=180):
                 msgs = resp.json().get('hydra:member', [])
                 if poll_count == 1 or poll_count % 10 == 0:
                     log(f"   [轮询 {poll_count}] 收到 {len(msgs)} 封邮件")
-                if msgs:
-                    msg_id = msgs[0]['id']
+                
+                # 🔥 遍历所有邮件，找到最新的验证码邮件
+                for msg in msgs:
+                    msg_id = msg.get('id')
+                    msg_created = msg.get('createdAt', '')
+                    
+                    # 🔥 检查邮件时间戳（只处理等待开始后的邮件）
+                    if msg_created:
+                        try:
+                            # DuckMail 返回的时间格式：2022-04-01T00:00:00.000Z (UTC)
+                            msg_time = datetime.fromisoformat(msg_created.replace('Z', '+00:00'))
+                            if msg_time < wait_start_utc:
+                                if poll_count == 1:
+                                    log(f"   [跳过] 旧邮件 ({msg_created})")
+                                continue  # 跳过旧邮件
+                        except:
+                            pass  # 解析失败则不过滤
+                    
+                    # 获取邮件详情
                     detail = requests.get(
                         f"{DUCKMAIL_API}/messages/{msg_id}",
                         headers=headers,
@@ -202,10 +222,13 @@ def wait_for_verification_code(email, token, timeout=180):
                     content = data.get('text') or data.get('html') or ""
                     subject = data.get('subject', '')
                     
+                    # 检查是否是 Gemini 验证码邮件
+                    if 'gemini' not in subject.lower() and 'verification' not in subject.lower() and '验证' not in subject:
+                        continue  # 不是验证码邮件
+                    
                     if poll_count == 1:
                         log(f"   [邮件标题] {subject[:50]}...")
                         log(f"   [邮件内容长度] {len(content)} 字符")
-                        # 打印邮件内容的前 200 个字符用于调试
                         if content:
                             log(f"   [邮件内容前200字符] {content[:200]}...")
                     
@@ -213,7 +236,7 @@ def wait_for_verification_code(email, token, timeout=180):
                     import re
                     
                     # 匹配上下文关键词后的验证码（字母+数字 4-8 位）
-                    pattern_context = r'(?:验证码|code|verification|passcode|pin).*?[:：]\s*([A-Za-z0-9]{4,8})\b'
+                    pattern_context = r'(?:验证码|code|verification|passcode|pin).*?[:：]?\s*([A-Za-z0-9]{4,8})\b'
                     match = re.search(pattern_context, content, re.IGNORECASE | re.DOTALL)
                     if match:
                         code = match.group(1).upper()
