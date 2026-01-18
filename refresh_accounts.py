@@ -202,13 +202,33 @@ def wait_for_verification_code(email, token, timeout=180):
                     # 🔥 检查邮件时间戳（只处理等待开始后的邮件）
                     if msg_created:
                         try:
-                            # DuckMail 返回的时间格式：2022-04-01T00:00:00.000Z (UTC)
-                            msg_time = datetime.fromisoformat(msg_created.replace('Z', '+00:00'))
-                            if msg_time < wait_start_utc:
+                            # 解析邮件时间戳并统一转换为 UTC
+                            # DuckMail 可能返回：
+                            # - 带 Z 后缀的 UTC 时间：2022-04-01T00:00:00.000Z
+                            # - 带时区偏移的时间：2022-04-01T08:00:00+08:00
+                            # - 无时区信息的时间（假设为北京时间）
+                            
+                            if msg_created.endswith('Z'):
+                                # Z 后缀表示 UTC
+                                msg_time = datetime.fromisoformat(msg_created.replace('Z', '+00:00'))
+                            elif '+' in msg_created or msg_created.count('-') > 2:
+                                # 已有时区偏移
+                                msg_time = datetime.fromisoformat(msg_created)
+                            else:
+                                # 无时区信息，假设为北京时间 (UTC+8)
+                                beijing_tz = timezone(timedelta(hours=8))
+                                msg_time = datetime.fromisoformat(msg_created).replace(tzinfo=beijing_tz)
+                            
+                            # 统一转换为 UTC 进行比较
+                            msg_time_utc = msg_time.astimezone(timezone.utc)
+                            
+                            if msg_time_utc < wait_start_utc:
                                 if poll_count == 1:
-                                    log(f"   [跳过] 旧邮件 ({msg_created})")
+                                    log(f"   [跳过] 旧邮件 ({msg_created} -> {msg_time_utc.strftime('%H:%M:%S')} UTC)")
                                 continue  # 跳过旧邮件
-                        except:
+                        except Exception as e:
+                            if poll_count == 1:
+                                log(f"   [时间解析失败] {e}")
                             pass  # 解析失败则不过滤
                     
                     # 获取邮件详情
