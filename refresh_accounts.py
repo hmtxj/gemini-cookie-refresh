@@ -511,32 +511,64 @@ def refresh_single_account(account):
                     btn.click(by_js=True)
                 break
         
-        # 等待登录完成（按照注册机方式）
+        # 等待登录完成（增强版检测）
         log("   等待登录完成...")
         login_complete = False
-        for i in range(30):
+        for i in range(40):  # 增加等待时间到 40 秒
             time.sleep(1)
             page_text = page.html or ""
             current_url = page.url or ""
+            
+            # 每 10 秒输出一次调试信息
+            if i > 0 and i % 10 == 0:
+                log(f"   [调试] 等待 {i} 秒，当前 URL: {current_url[:80]}...")
             
             # 检查是否还在登录中
             if "正在登录" in page_text or "Signing in" in page_text:
                 continue
             
-            # 检查是否登录成功
+            # 检查是否还在验证码页面
+            if "verify-oob-code" in current_url or "验证码" in page_text or "pinInput" in page_text:
+                continue
+            
+            # 检查是否登录成功 - 多种条件
+            # 条件 1: URL 包含 /cid/
             if '/cid/' in current_url:
                 log("   ✅ 登录成功，URL 包含 /cid/")
                 login_complete = True
                 break
+            
+            # 条件 2: URL 是 business.gemini.google 主页
+            if 'business.gemini.google' in current_url and '/home' in current_url:
+                log("   ✅ 登录成功，已跳转到主页")
+                login_complete = True
+                break
+            
+            # 条件 3: 页面包含主页关键词
             if "免费试用" in page_text or "全名" in page_text or "新对话" in page_text:
                 log("   ✅ 登录成功，检测到主页面")
                 login_complete = True
                 break
+            
+            # 条件 4: 检测到 Cookie 已存在（说明登录成功）
+            try:
+                cookies = page.cookies()
+                for c in cookies:
+                    if c.get('name') == '__Secure-C_SES' and c.get('value'):
+                        # 再等 2 秒让页面完全加载
+                        time.sleep(2)
+                        log("   ✅ 登录成功，检测到 Cookie")
+                        login_complete = True
+                        break
+                if login_complete:
+                    break
+            except:
+                pass
         
         if not login_complete:
-            log("   ⚠️ 登录状态不确定")
+            log(f"   ⚠️ 登录状态不确定，当前 URL: {current_url[:80]}...")
         
-        time.sleep(2)  # 额外等待确保页面加载完成
+        time.sleep(3)  # 额外等待确保页面加载完成
         
         # 提取 Cookie 和 URL 参数
         current_url = page.url
