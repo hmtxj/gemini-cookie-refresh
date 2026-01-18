@@ -756,15 +756,15 @@ def refresh_all_accounts(force=False):
         
         # 🔥 增加账号间隔，避免触发 Google 限流
         if i < len(accounts):  # 不是最后一个账号
-            # 每 10 个账号输出批次提示
+            # 每 10 个账号休息 15 秒
             if i % 10 == 0:
-                log(f"\n⏸️ 已完成 {i} 个账号，休息 60 秒后继续...")
-                time.sleep(60)
+                log(f"\n⏸️ 已完成 {i} 个账号，休息 15 秒后继续...")
+                time.sleep(15)
             else:
-                # 随机等待 45-90 秒
+                # 随机等待 5-10 秒
                 import random
-                wait_time = random.uniform(45, 90)
-                log(f"   💤 等待 {wait_time:.0f} 秒后继续下一个账号...")
+                wait_time = random.uniform(5, 10)
+                log(f"   💤 等待 {wait_time:.0f} 秒后继续...")
                 time.sleep(wait_time)
     
     # 保存更新后的账号
