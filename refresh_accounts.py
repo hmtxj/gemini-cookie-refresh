@@ -473,14 +473,17 @@ def refresh_single_account(account):
             if idx + 1 < len(path_parts):
                 config_id = path_parts[idx + 1]
         
-        # 从 Cookie 提取 secure_c_ses 和 host_c_oses
+        # 从 Cookie 提取 secure_c_ses、host_c_oses 和过期时间
         secure_c_ses = ""
         host_c_oses = ""
+        expires_timestamp = None
         for c in cookies:
             name = c.get('name', '')
             value = c.get('value', '')
             if name == '__Secure-C_SES':
                 secure_c_ses = value
+                # 读取 Cookie 的真实过期时间
+                expires_timestamp = c.get('expirationDate') or c.get('expiry')
             elif name == '__Host-C_OSES':
                 host_c_oses = value
         
@@ -490,6 +493,22 @@ def refresh_single_account(account):
                 page.quit()
             return False, None
         
+        # 计算过期时间（从 Cookie 读取，转换为北京时间）
+        if expires_timestamp and isinstance(expires_timestamp, (int, float)):
+            try:
+                from datetime import timezone
+                # Cookie 的 expirationDate 是 UTC 时间戳，转换为北京时间
+                utc_dt = datetime.fromtimestamp(expires_timestamp, tz=timezone.utc)
+                beijing_tz = timezone(timedelta(hours=8))
+                beijing_dt = utc_dt.astimezone(beijing_tz)
+                expires_at = beijing_dt.strftime("%Y-%m-%d %H:%M:%S")
+                log(f"   [Cookie 过期时间-北京] {expires_at}")
+            except Exception as e:
+                log(f"   [时间转换警告] {e}，使用默认值")
+                expires_at = (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            expires_at = (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
+        
         # 构造新的账号数据
         new_account = {
             "id": email,
@@ -498,7 +517,7 @@ def refresh_single_account(account):
             "config_id": config_id or account.get('config_id', ''),
             "secure_c_ses": secure_c_ses,
             "host_c_oses": host_c_oses,
-            "expires_at": (datetime.now() + timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
+            "expires_at": expires_at
         }
         
         log("   ✅ 刷新成功！")
