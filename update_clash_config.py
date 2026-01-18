@@ -20,34 +20,30 @@ try:
     if 'rules' in config:
         del config['rules']
     
-    # 选择一个可用的代理节点
+    # 选择一个可用的代理节点（只使用美国节点）
     selected_proxy = None
+    us_proxies = []  # 收集所有美国节点
+    
     if 'proxies' in config and config['proxies']:
         all_names = [p.get('name', '') for p in config['proxies']]
         
-        # 优先选择已知可用的节点
-        preferred_nodes = [
-            '日本专线02|BGP|流媒体',
-            '香港专线03|BGP|流媒体',
-            '日本专线01|BGP|流媒体',
-        ]
+        # 筛选美国节点
+        us_keywords = ['美国', 'us', 'usa', 'america', 'united states', '洛杉矶', 'los angeles', '硅谷', 'silicon', '纽约', 'new york', '西雅图', 'seattle', '芝加哥', 'chicago']
         
-        for node in preferred_nodes:
-            if node in all_names:
-                selected_proxy = node
-                break
+        for p in config['proxies']:
+            name = p.get('name', '')
+            name_lower = name.lower()
+            if any(k in name_lower for k in us_keywords):
+                us_proxies.append(name)
         
-        # 如果没找到优选节点，选择任意香港/日本节点
-        if not selected_proxy:
-            for p in config['proxies']:
-                name = p.get('name', '')
-                name_lower = name.lower()
-                if any(k in name_lower for k in ['香港', 'hk', 'hong', '日本', 'jp', 'japan']):
-                    selected_proxy = name
-                    break
+        print(f"📍 找到 {len(us_proxies)} 个美国节点")
         
-        # 还是没有就选第一个
-        if not selected_proxy:
+        # 随机选择一个美国节点
+        if us_proxies:
+            selected_proxy = random.choice(us_proxies)
+        else:
+            # 如果没有美国节点，选择第一个可用节点
+            print("⚠️ 未找到美国节点，使用第一个可用节点")
             selected_proxy = config['proxies'][0]['name']
         
         print(f"✅ 选择代理节点: {selected_proxy}")
