@@ -393,137 +393,71 @@ def refresh_single_account(account):
             time.sleep(wait_time)
             page.get_screenshot(path=f"screenshots/{account_id}_01_landing.png")
             
-            # 输入邮箱（模拟人类操作：先点击，等待，再输入）
+            # 输入邮箱（与注册机保持一致）
             log("   输入邮箱...")
             email_input.click()
-            time.sleep(random.uniform(0.8, 1.5))  # 随机延迟
+            time.sleep(0.3)
             email_input.clear()
-            time.sleep(random.uniform(0.3, 0.6))
+            time.sleep(0.2)
+            email_input.input(email)  # 一次性输入，与注册机一致
+            time.sleep(0.3)
             
-            # 🔥 逐字符输入邮箱（模拟人类打字，每个字符间隔 50-150ms）
-            for char in email:
-                email_input.input(char)
-                time.sleep(random.uniform(0.05, 0.15))
-            
-            time.sleep(random.uniform(1, 2))  # 输入完成后等待
-            
-            # 触发 JavaScript 事件（模拟真实用户输入）
-            try:
-                page.run_js('''
-                    let el = document.querySelector("#email-input") || document.querySelector("input[type=text]");
-                    if(el) {
-                        el.dispatchEvent(new Event("input", {bubbles: true}));
-                        el.dispatchEvent(new Event("change", {bubbles: true}));
-                        el.dispatchEvent(new Event("blur", {bubbles: true}));
-                    }
-                ''')
-            except:
-                pass
-            time.sleep(random.uniform(1, 2))
+            # 触发 JavaScript 事件（与注册机一致）
+            page.run_js('''
+                let el = document.querySelector("#email-input") || document.querySelector("input[type=text]");
+                if(el) {
+                    el.dispatchEvent(new Event("input", {bubbles: true}));
+                    el.dispatchEvent(new Event("change", {bubbles: true}));
+                    el.dispatchEvent(new Event("blur", {bubbles: true}));
+                }
+            ''')
             page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
             
-            # 🔥 等待"使用邮箱继续"按钮可点击
-            log("   等待按钮可点击...")
-            continue_btn = None
-            for wait_count in range(15):  # 最多等待 15 秒
-                # 优先使用精确的 ID 选择器
-                continue_btn = page.ele('#log-in-button', timeout=1) or \
-                               page.ele('css:button[type="submit"]', timeout=0.5) or \
-                               page.ele('tag:button@text():使用邮箱继续', timeout=0.5) or \
-                               page.ele('tag:button@text():Continue with email', timeout=0.5)
-                if continue_btn:
-                    break
-                time.sleep(1)
+            # 等待按钮并点击（与注册机保持一致）
+            time.sleep(0.5)
+            continue_btn = page.ele('tag:button@text():使用邮箱继续', timeout=2) or \
+                           page.ele('tag:button', timeout=1)
             
-            # 🔥 模拟人类点击按钮（鼠标悬停 -> 等待 -> 点击）
             log("   点击'使用邮箱继续'按钮...")
             if continue_btn:
                 try:
-                    # 1. 滚动到按钮可见位置
-                    page.run_js('arguments[0].scrollIntoView({block: "center"});', continue_btn)
-                    time.sleep(random.uniform(0.5, 1))
-                    
-                    # 2. 模拟鼠标悬停在按钮上（触发 hover 事件）
-                    try:
-                        page.run_js('''
-                            arguments[0].dispatchEvent(new MouseEvent("mouseenter", {bubbles: true}));
-                            arguments[0].dispatchEvent(new MouseEvent("mouseover", {bubbles: true}));
-                        ''', continue_btn)
-                    except:
-                        pass
-                    time.sleep(random.uniform(0.8, 1.5))  # 悬停后等待
-                    
-                    # 3. 模拟鼠标按下和抬起（更接近真实点击）
-                    try:
-                        page.run_js('''
-                            arguments[0].dispatchEvent(new MouseEvent("mousedown", {bubbles: true}));
-                        ''', continue_btn)
-                        time.sleep(random.uniform(0.05, 0.1))
-                        page.run_js('''
-                            arguments[0].dispatchEvent(new MouseEvent("mouseup", {bubbles: true}));
-                            arguments[0].click();
-                        ''', continue_btn)
-                    except:
-                        continue_btn.click()
-                    
-                    log("   ✅ 已点击按钮")
-                except Exception as e:
-                    log(f"   ⚠️ 点击异常: {e}，尝试回车提交")
-                    email_input.input('\n')
+                    continue_btn.click()
+                except:
+                    continue_btn.click(by_js=True)
+                log("   ✅ 已点击按钮")
             else:
-                log("   ⚠️ 找不到按钮，尝试回车提交")
                 email_input.input('\n')
+                log("   使用回车提交")
             
-            # 🔥 等待页面跳转（智能等待：检测页面变化）
+            # 🔥 等待页面跳转（与注册机保持一致：简单等待3秒）
             log("   等待页面响应...")
-            time.sleep(random.uniform(4, 6))  # 先等待 4-6 秒让页面开始加载
+            time.sleep(3)  # 与注册机一致，只等3秒
             
-            # 智能等待：每 2 秒检测一次页面状态，最多等待 30 秒
-            for wait_count in range(15):
-                time.sleep(2)
-                current_url = page.url or ""
-                page_html = page.html or ""
-
-                
-                # 检查是否已跳转到验证码页面
-                if "pinInput" in page_html or "verify" in current_url.lower():
-                    log("   ✅ 检测到验证码页面")
-                    break
-                
-                # 检查是否遇到错误页面
-                if "请试试其他方法" in page_html or "Let's try something else" in page_html:
-                    break  # 跳出等待，进入错误处理
-                
-                # 检查是否还在加载中
-                if "加载" in page_html or "loading" in page_html.lower():
-                    continue  # 继续等待
-            
-            page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
-            
-            # 检查是否遇到错误页面
+            # 检测错误页面（与注册机逻辑一致）
+            curr_url = page.url or ""
             page_html = page.html or ""
-            if "请试试其他方法" in page_html or "Let's try something else" in page_html:
-                log(f"   ⚠️ 遇到服务器错误，重试...")
+            if "signin-error" in curr_url or "请试试其他方法" in page_html or "Try another way" in page_html or "Let's try something else" in page_html:
+                log(f"   ⚠️ 遇到风控页面，重试...")
                 page.get_screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
-                
                 if attempt >= max_retries - 1:
                     log(f"   ❌ 重试 {max_retries} 次仍失败，跳过此账号")
                     if page:
                         page.quit()
                     return False, None
-                
                 time.sleep(3)
                 continue
             
-            # 等待验证码输入框
-            log("   等待验证码输入框... (最长 30 秒)")
+            page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
+            
+            # 等待验证码输入框（与注册机一致：最多10次，每次0.5秒）
+            log("   等待验证码输入框...")
             code_input = None
-            for _ in range(30):
-                code_input = page.ele('css:input[name="pinInput"]', timeout=1) or \
+            for _ in range(10):
+                code_input = page.ele('css:input[name="pinInput"]', timeout=2) or \
                              page.ele('css:input[type="tel"]', timeout=1)
                 if code_input:
                     break
-                time.sleep(1)
+                time.sleep(0.5)
             
             if code_input:
                 break  # 找到验证码输入框，退出重试循环
