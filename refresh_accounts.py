@@ -365,92 +365,62 @@ def refresh_single_account(account):
         
         max_retries = 3
         for attempt in range(max_retries):
-            # 访问 Gemini Business
+            # 访问 Gemini Business（与 Linux 版本保持一致）
             log(f"   打开 Gemini Business... (尝试 {attempt + 1}/{max_retries})")
             page.get("https://business.gemini.google/", timeout=30)
+            time.sleep(3)  # 固定等待 3 秒，与 Linux 版本一致
+            page.get_screenshot(path=f"screenshots/{account_id}_01_landing.png")
             
-            # 🔥 等待页面完全加载（智能等待：检测邮箱输入框出现）
-            log("   等待页面加载...")
-            email_input = None
-            for wait_count in range(20):  # 最多等待 20 秒
-                email_input = page.ele('#email-input', timeout=1) or \
-                              page.ele('css:input[name="loginHint"]', timeout=0.5) or \
-                              page.ele('css:input[type="text"]', timeout=0.5)
-                if email_input:
-                    break
-                time.sleep(1)
-            
+            # 输入邮箱（简化版，与 Linux 版本一致，不触发额外 JS 事件）
+            log("   输入邮箱...")
+            email_input = page.ele('#email-input', timeout=3) or \
+                          page.ele('css:input[name="loginHint"]', timeout=2) or \
+                          page.ele('css:input[type="text"]', timeout=2)
             if not email_input:
-                log("   ❌ 页面加载超时，找不到邮箱输入框")
+                log("   ❌ 找不到邮箱输入框")
                 if attempt < max_retries - 1:
                     continue
                 return False, None
-            
-            # 🔥 页面加载后额外等待（随机 3-5 秒，模拟人类阅读页面）
-            import random
-            wait_time = random.uniform(3, 5)
-            log(f"   页面已加载，等待 {wait_time:.1f} 秒...")
-            time.sleep(wait_time)
-            page.get_screenshot(path=f"screenshots/{account_id}_01_landing.png")
-            
-            # 输入邮箱（与注册机保持一致）
-            log("   输入邮箱...")
             email_input.click()
             time.sleep(0.3)
             email_input.clear()
-            time.sleep(0.2)
-            email_input.input(email)  # 一次性输入，与注册机一致
-            time.sleep(0.3)
-            
-            # 触发 JavaScript 事件（与注册机一致）
-            page.run_js('''
-                let el = document.querySelector("#email-input") || document.querySelector("input[type=text]");
-                if(el) {
-                    el.dispatchEvent(new Event("input", {bubbles: true}));
-                    el.dispatchEvent(new Event("change", {bubbles: true}));
-                    el.dispatchEvent(new Event("blur", {bubbles: true}));
-                }
-            ''')
+            email_input.input(email)
+            time.sleep(0.5)
             page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
             
-            # 等待按钮并点击（与 Linux 版本保持一致）
+            # 点击继续按钮（与 Linux 版本一致）
             log("   等待按钮可点击...")
-            time.sleep(0.5)
-            continue_btn = page.ele('tag:button@text():使用邮箱继续', timeout=5) or \
-                           page.ele('tag:button@text():Continue with email', timeout=3) or \
-                           page.ele('tag:button', timeout=2)
-            
-            log("   点击'使用邮箱继续'按钮...")
+            continue_btn = page.ele('text:使用邮箱继续', timeout=2) or \
+                           page.ele('text:Continue with email', timeout=2) or \
+                           page.ele('css:button', timeout=2)
             if continue_btn:
-                try:
-                    continue_btn.click()
-                except:
-                    continue_btn.click(by_js=True)
+                log("   点击'使用邮箱继续'按钮...")
+                continue_btn.click()
                 log("   ✅ 已点击按钮")
-            else:
-                email_input.input('\n')
-                log("   使用回车提交")
-            
-            # 🔥 等待页面跳转（与注册机保持一致：简单等待3秒）
+            time.sleep(3)  # 固定等待 3 秒
             log("   等待页面响应...")
-            time.sleep(3)  # 与注册机一致，只等3秒
+            page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
-            # 检测错误页面（修复：使用 DOM 元素检测，避免 HTML 字符串误匹配）
+            # 检查是否遇到错误页面（与 Linux 版本完全一致）
             error_elem = page.ele('text:请试试其他方法', timeout=2) or \
-                         page.ele('text:Let\'s try something else', timeout=1) or \
-                         page.ele('text:Try another way', timeout=1)
+                         page.ele('text:Let\'s try something else', timeout=2)
             if error_elem:
                 log(f"   ⚠️ 遇到服务器错误，重试...")
                 page.get_screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
+                
                 if attempt >= max_retries - 1:
                     log(f"   ❌ 重试 {max_retries} 次仍失败，跳过此账号")
                     if page:
                         page.quit()
                     return False, None
-                time.sleep(3)
+                
+                # 点击重试按钮（与 Linux 版本一致）
+                retry_btn = page.ele('text:注册或登录', timeout=2) or \
+                            page.ele('text:Sign up or sign in', timeout=2)
+                if retry_btn:
+                    retry_btn.click()
+                    time.sleep(2)
                 continue
-            
-            page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
             # 等待验证码输入框（修复：增加等待时间到 30 秒，与 Linux 版本一致）
             log("   等待验证码输入框... (最长 30 秒)")
