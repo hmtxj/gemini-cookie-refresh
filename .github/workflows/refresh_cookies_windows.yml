@@ -33,6 +33,7 @@ jobs:
           chrome --version
       
       - name: 设置代理
+        continue-on-error: true
         env:
           CLASH_CONFIG: ${{ secrets.CLASH_CONFIG }}
         shell: pwsh
