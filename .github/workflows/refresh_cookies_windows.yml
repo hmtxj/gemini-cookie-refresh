@@ -1,0 +1,123 @@
+name: 刷新 Gemini Business Cookie (Windows)
+
+on:
+  # 手动触发（测试用）
+  workflow_dispatch:
+  # 定时执行：每 10 小时运行一次（取消注释后启用）
+  # schedule:
+  #   - cron: '0 */10 * * *'
+
+jobs:
+  refresh:
+    runs-on: windows-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: 安装 Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+      
+      - name: 安装依赖
+        run: |
+          pip install DrissionPage requests huggingface_hub psycopg2-binary pyyaml
+          chrome --version
+      
+      - name: 设置代理
+        env:
+          CLASH_CONFIG: ${{ secrets.CLASH_CONFIG }}
+        shell: pwsh
+        run: |
+          Write-Host "📦 下载 mihomo (Clash Meta) Windows 版..."
+          
+          # 下载 Windows 版 mihomo
+          $url = "https://github.com/MetaCubeX/mihomo/releases/download/v1.18.10/mihomo-windows-amd64-v1.18.10.zip"
+          $fallbackUrl = "https://mirror.ghproxy.com/https://github.com/MetaCubeX/mihomo/releases/download/v1.18.10/mihomo-windows-amd64-v1.18.10.zip"
+          
+          try {
+            Invoke-WebRequest -Uri $url -OutFile "mihomo.zip" -TimeoutSec 60
+          } catch {
+            Write-Host "主源下载失败，尝试镜像..."
+            Invoke-WebRequest -Uri $fallbackUrl -OutFile "mihomo.zip" -TimeoutSec 60
+          }
+          
+          # 解压
+          Expand-Archive -Path "mihomo.zip" -DestinationPath "." -Force
+          Rename-Item -Path "mihomo-windows-amd64.exe" -NewName "mihomo.exe" -ErrorAction SilentlyContinue
+          
+          Write-Host "📝 从 Secret 恢复 Clash 配置..."
+          $env:CLASH_CONFIG | Out-File -FilePath "local.yaml" -Encoding utf8
+          
+          Write-Host "📝 修改配置..."
+          python update_clash_config.py local.yaml
+          
+          Write-Host "🚀 启动代理..."
+          Start-Process -FilePath ".\mihomo.exe" -ArgumentList "-f", "local.yaml" -NoNewWindow -RedirectStandardOutput "clash.log" -RedirectStandardError "clash_err.log"
+          Start-Sleep -Seconds 10
+          
+          Write-Host "📋 Clash 启动日志:"
+          if (Test-Path "clash.log") { Get-Content "clash.log" -ErrorAction SilentlyContinue }
+          
+          Write-Host ""
+          Write-Host "🔍 验证代理..."
+          Write-Host "📍 GitHub Actions 原始 IP:"
+          try {
+            (Invoke-WebRequest -Uri "https://api.ipify.org" -TimeoutSec 10).Content
+          } catch { Write-Host "获取失败" }
+          
+          Write-Host ""
+          Write-Host "📍 通过代理的 IP:"
+          try {
+            (Invoke-WebRequest -Uri "https://api.ipify.org" -Proxy "http://127.0.0.1:7890" -TimeoutSec 15).Content
+          } catch { Write-Host "代理连接失败: $_" }
+          
+          Write-Host ""
+          Write-Host "📍 通过代理访问 Google:"
+          try {
+            $resp = Invoke-WebRequest -Uri "https://www.google.com" -Proxy "http://127.0.0.1:7890" -TimeoutSec 15
+            Write-Host "HTTP $($resp.StatusCode)"
+          } catch { Write-Host "失败: $_" }
+      
+      - name: 从 Secret 恢复 accounts.json
+        env:
+          ACCOUNTS_JSON: ${{ secrets.ACCOUNTS_JSON }}
+        shell: pwsh
+        run: |
+          $env:ACCOUNTS_JSON | Out-File -FilePath "accounts.json" -Encoding utf8
+          $size = (Get-Item "accounts.json").Length
+          Write-Host "accounts.json 内容长度: $size 字节"
+      
+      - name: 运行刷新脚本
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PROXY_URL: http://127.0.0.1:7890
+        shell: pwsh
+        run: |
+          Write-Host "🚀 运行刷新脚本..."
+          python refresh_accounts.py --force
+      
+      - name: 上传调试截图
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-windows
+          path: screenshots/
+          if-no-files-found: ignore
+      
+      - name: 更新 Secret 中的 accounts.json
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        shell: pwsh
+        run: |
+          Get-Content "accounts.json" | gh secret set ACCOUNTS_JSON
