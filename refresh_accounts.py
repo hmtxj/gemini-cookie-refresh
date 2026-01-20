@@ -413,10 +413,12 @@ def refresh_single_account(account):
             ''')
             page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
             
-            # 等待按钮并点击（与注册机保持一致）
+            # 等待按钮并点击（与 Linux 版本保持一致）
+            log("   等待按钮可点击...")
             time.sleep(0.5)
-            continue_btn = page.ele('tag:button@text():使用邮箱继续', timeout=2) or \
-                           page.ele('tag:button', timeout=1)
+            continue_btn = page.ele('tag:button@text():使用邮箱继续', timeout=5) or \
+                           page.ele('tag:button@text():Continue with email', timeout=3) or \
+                           page.ele('tag:button', timeout=2)
             
             log("   点击'使用邮箱继续'按钮...")
             if continue_btn:
@@ -433,11 +435,12 @@ def refresh_single_account(account):
             log("   等待页面响应...")
             time.sleep(3)  # 与注册机一致，只等3秒
             
-            # 检测错误页面（与注册机逻辑一致）
-            curr_url = page.url or ""
-            page_html = page.html or ""
-            if "signin-error" in curr_url or "请试试其他方法" in page_html or "Try another way" in page_html or "Let's try something else" in page_html:
-                log(f"   ⚠️ 遇到风控页面，重试...")
+            # 检测错误页面（修复：使用 DOM 元素检测，避免 HTML 字符串误匹配）
+            error_elem = page.ele('text:请试试其他方法', timeout=2) or \
+                         page.ele('text:Let\'s try something else', timeout=1) or \
+                         page.ele('text:Try another way', timeout=1)
+            if error_elem:
+                log(f"   ⚠️ 遇到服务器错误，重试...")
                 page.get_screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
                 if attempt >= max_retries - 1:
                     log(f"   ❌ 重试 {max_retries} 次仍失败，跳过此账号")
@@ -449,17 +452,18 @@ def refresh_single_account(account):
             
             page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
-            # 等待验证码输入框（与注册机一致：最多10次，每次0.5秒）
-            log("   等待验证码输入框...")
+            # 等待验证码输入框（修复：增加等待时间到 30 秒，与 Linux 版本一致）
+            log("   等待验证码输入框... (最长 30 秒)")
             code_input = None
-            for _ in range(10):
-                code_input = page.ele('css:input[name="pinInput"]', timeout=2) or \
+            for _ in range(30):  # 30 次 × 1 秒 = 30 秒
+                code_input = page.ele('css:input[name="pinInput"]', timeout=1) or \
                              page.ele('css:input[type="tel"]', timeout=1)
                 if code_input:
                     break
-                time.sleep(0.5)
+                time.sleep(1)
             
             if code_input:
+                log("   ✅ 检测到验证码页面")  # 新增：确认成功进入验证码流程
                 break  # 找到验证码输入框，退出重试循环
             else:
                 if attempt < max_retries - 1:
