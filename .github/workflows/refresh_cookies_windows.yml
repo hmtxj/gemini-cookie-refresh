@@ -32,15 +32,19 @@ jobs:
           pip install DrissionPage requests huggingface_hub psycopg2-binary pyyaml
           chrome --version
       
-      - name: 设置代理
-        continue-on-error: true
+      - name: 设置代理并运行刷新脚本
         env:
           CLASH_CONFIG: ${{ secrets.CLASH_CONFIG }}
+          ACCOUNTS_JSON: ${{ secrets.ACCOUNTS_JSON }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PROXY_URL: http://127.0.0.1:7890
         shell: pwsh
         run: |
+          # ========== 1. 下载代理 ==========
           Write-Host "📦 下载 mihomo (Clash Meta) Windows 版..."
           
-          # 下载 Windows 版 mihomo
           $url = "https://github.com/MetaCubeX/mihomo/releases/download/v1.18.10/mihomo-windows-amd64-v1.18.10.zip"
           $fallbackUrl = "https://mirror.ghproxy.com/https://github.com/MetaCubeX/mihomo/releases/download/v1.18.10/mihomo-windows-amd64-v1.18.10.zip"
           
@@ -51,23 +55,23 @@ jobs:
             Invoke-WebRequest -Uri $fallbackUrl -OutFile "mihomo.zip" -TimeoutSec 60
           }
           
-          # 解压
           Expand-Archive -Path "mihomo.zip" -DestinationPath "." -Force
           Rename-Item -Path "mihomo-windows-amd64.exe" -NewName "mihomo.exe" -ErrorAction SilentlyContinue
           
+          # ========== 2. 配置代理 ==========
           Write-Host "📝 从 Secret 恢复 Clash 配置..."
           $env:CLASH_CONFIG | Out-File -FilePath "local.yaml" -Encoding utf8
           
           Write-Host "📝 修改配置..."
           python update_clash_config.py local.yaml
           
+          # ========== 3. 启动代理（保持后台运行） ==========
           Write-Host "🚀 启动代理..."
-          Start-Process -FilePath ".\mihomo.exe" -ArgumentList "-f", "local.yaml" -NoNewWindow -RedirectStandardOutput "clash.log" -RedirectStandardError "clash_err.log"
+          $proxyProcess = Start-Process -FilePath ".\mihomo.exe" -ArgumentList "-f", "local.yaml" -PassThru -NoNewWindow
+          Write-Host "Mihomo PID: $($proxyProcess.Id)"
           Start-Sleep -Seconds 10
           
-          Write-Host "📋 Clash 启动日志:"
-          if (Test-Path "clash.log") { Get-Content "clash.log" -ErrorAction SilentlyContinue }
-          
+          # ========== 4. 验证代理 ==========
           Write-Host ""
           Write-Host "🔍 验证代理..."
           Write-Host "📍 GitHub Actions 原始 IP:"
@@ -87,26 +91,26 @@ jobs:
             $resp = Invoke-WebRequest -Uri "https://www.google.com" -Proxy "http://127.0.0.1:7890" -TimeoutSec 15
             Write-Host "HTTP $($resp.StatusCode)"
           } catch { Write-Host "失败: $_" }
-      
-      - name: 从 Secret 恢复 accounts.json
-        env:
-          ACCOUNTS_JSON: ${{ secrets.ACCOUNTS_JSON }}
-        shell: pwsh
-        run: |
+          
+          # ========== 5. 恢复 accounts.json ==========
+          Write-Host ""
+          Write-Host "📦 恢复 accounts.json..."
           $env:ACCOUNTS_JSON | Out-File -FilePath "accounts.json" -Encoding utf8
           $size = (Get-Item "accounts.json").Length
           Write-Host "accounts.json 内容长度: $size 字节"
-      
-      - name: 运行刷新脚本
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          PROXY_URL: http://127.0.0.1:7890
-        shell: pwsh
-        run: |
+          
+          # ========== 6. 运行刷新脚本 ==========
+          Write-Host ""
           Write-Host "🚀 运行刷新脚本..."
           python refresh_accounts.py --force
+          
+          # ========== 7. 停止代理 ==========
+          Write-Host ""
+          Write-Host "🛑 停止代理..."
+          if ($proxyProcess -and !$proxyProcess.HasExited) {
+            $proxyProcess.Kill()
+            Write-Host "代理已停止"
+          }
       
       - name: 上传调试截图
         if: always()
