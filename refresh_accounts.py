@@ -141,6 +141,16 @@ def save_accounts(accounts):
     # 如果启用数据库，同时保存到数据库
     if is_database_enabled():
         db_save_accounts(accounts)
+        
+        # 🔥 [NEW] 顺手推送到 HF，实现完美闭环 (调用 sync_to_db 的现有逻辑)
+        try:
+            from sync_to_db import trigger_reload
+            log("🚀 正在触发 HF Space 热重载...")
+            trigger_reload(accounts)
+        except ImportError:
+            log("⚠️ 无法导入 trigger_reload，跳过热重载")
+        except Exception as e:
+            log(f"⚠️ 热重载触发失败: {e}")
 
 
 def get_remaining_hours(expires_at):
