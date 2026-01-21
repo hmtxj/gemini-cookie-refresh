@@ -4,9 +4,9 @@ on:
   # 手动触发
   workflow_dispatch:
 
-  # 定时执行：每 6 小时运行一次 (Windows 是主力)
+  # 定时执行：每 10 小时运行一次
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 */10 * * *'
   
   # 定时执行：每 10 小时运行一次
   # schedule:
