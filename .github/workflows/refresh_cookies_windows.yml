@@ -4,6 +4,11 @@ on:
   # 手动触发
   workflow_dispatch:
 
+  # 定时执行：每 10 小时运行一次
+  schedule:
+    - cron: '0 */10 * * *'
+  
+
 jobs:
   refresh:
     runs-on: windows-latest
@@ -29,8 +34,6 @@ jobs:
           pip install DrissionPage requests huggingface_hub psycopg2-binary pyyaml
           chrome --version 2>$null || echo "Chrome installed via action"
       
-      # 从 Secret 恢复 Clash 配置并启动代理
-      # 从 Secret 恢复 Clash 配置并启动代理
       # 从 Secret 恢复 Clash 配置并启动代理，然后在同一 Step 中运行脚本
       - name: 启动代理并运行脚本 (合并步骤)
         env:

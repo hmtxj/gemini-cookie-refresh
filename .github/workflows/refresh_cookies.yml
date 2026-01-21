@@ -1,9 +1,9 @@
 name: 刷新 Gemini Business Cookie
 
 on:
-  # 定时执行：每 10 小时运行一次
-  schedule:
-    - cron: '0 */10 * * *'
+  # 定时执行：已停用 (改用 Windows)
+  # schedule:
+  #   - cron: '0 */10 * * *'
   # 手动触发
   workflow_dispatch:
 
