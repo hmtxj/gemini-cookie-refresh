@@ -30,11 +30,14 @@ jobs:
           chrome --version 2>$null || echo "Chrome installed via action"
       
       # 从 Secret 恢复 Clash 配置并启动代理
+      # 从 Secret 恢复 Clash 配置并启动代理
       - name: 设置代理
         env:
           CLASH_CONFIG: ${{ secrets.CLASH_CONFIG }}
+          PYTHONIOENCODING: utf-8
         shell: pwsh
         run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           Write-Host "📦 下载 mihomo (Clash Meta) for Windows..."
           
           # 下载 Windows 版本的 mihomo
