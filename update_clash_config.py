@@ -4,12 +4,6 @@
 import yaml
 import sys
 import random
-import io
-
-# 修复 Windows 控制台编码问题（解决 emoji 字符 UnicodeEncodeError）
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 config_file = sys.argv[1] if len(sys.argv) > 1 else 'config.yaml'
 
