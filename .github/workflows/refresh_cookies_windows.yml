@@ -8,9 +8,6 @@ on:
   schedule:
     - cron: '0 */10 * * *'
   
-  # 定时执行：每 10 小时运行一次
-  # schedule:
-  #   - cron: '0 */10 * * *'
 
 jobs:
   refresh:
