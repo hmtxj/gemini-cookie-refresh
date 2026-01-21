@@ -5,6 +5,8 @@ import json
 import os
 import requests
 import psycopg2
+import copy
+from datetime import datetime, timedelta
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 ACCOUNTS_FILE = "accounts.json"
@@ -69,10 +71,25 @@ def trigger_reload(accounts):
         
         print("✅ 登录成功", flush=True)
         
+        # 🔥 [NEW] 针对 2api 转换时区 (UTC -> UTC+8)
+        # 数据库里存的是 UTC，但应用端希望看到北京时间
+        api_accounts = copy.deepcopy(accounts)
+        print(f"🔄 正在转换 {len(api_accounts)} 个账号时区 (UTC -> UTC+8)...", flush=True)
+        
+        for account in api_accounts:
+            expires = account.get('expires_at')
+            if expires:
+                try:
+                    dt = datetime.strptime(expires, "%Y-%m-%d %H:%M:%S")
+                    new_dt = dt + timedelta(hours=8)
+                    account['expires_at'] = new_dt.strftime("%Y-%m-%d %H:%M:%S")
+                except Exception as e:
+                    print(f"⚠️ 时间转换失败 (id={account.get('id')}): {e}", flush=True)
+        
         # 调用 PUT /admin/accounts-config 更新配置并触发热重载
         update_resp = session.put(
             f"{HF_SPACE_URL}/admin/accounts-config",
-            json=accounts,
+            json=api_accounts,
             timeout=30
         )
         
