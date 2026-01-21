@@ -69,7 +69,22 @@ jobs:
           Write-Host ""
           Write-Host "🚀 启动代理..."
           Start-Process -FilePath ".\mihomo.exe" -ArgumentList "-f", "local.yaml" -RedirectStandardOutput "clash.log" -RedirectStandardError "clash_err.log" -NoNewWindow
-          Start-Sleep -Seconds 10
+          
+          Write-Host "⏳ 等待代理端口开放..."
+          $retry = 0
+          while ($retry -lt 30) {
+              $conn = Test-NetConnection -ComputerName 127.0.0.1 -Port 7890 -InformationLevel Quiet
+              if ($conn) {
+                  Write-Host "✅ 代理端口 7890 已开放"
+                  break
+              }
+              Start-Sleep -Seconds 1
+              $retry++
+          }
+          if (-not $conn) {
+              Write-Host "❌ 代理启动超时"
+              exit 1
+          }
           
           Write-Host ""
           Write-Host "📋 Clash 启动日志:"
