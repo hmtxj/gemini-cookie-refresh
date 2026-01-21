@@ -313,6 +313,7 @@ def wait_for_verification_code(email, token, timeout=180):
 def refresh_single_account(account):
     """
     刷新单个账号的 Cookie
+    （完全复制自 Linux 版本，只添加 Windows headless 模式）
     
     返回: (success: bool, new_account_data: dict or None)
     """
@@ -338,9 +339,10 @@ def refresh_single_account(account):
         log("   ❌ 需要安装 DrissionPage: pip install DrissionPage")
         return False, None
     
-    # 配置浏览器
+    # 配置浏览器（与 Linux 版本一致）
     co = ChromiumOptions()
-    # Windows 环境使用 headless 模式（与注册机一致）
+    # Windows 环境必须使用 headless 模式（GitHub Actions 无 GUI）
+    import sys
     if sys.platform == 'win32':
         co.set_argument('--headless=new')
     co.set_argument('--incognito')
@@ -365,13 +367,13 @@ def refresh_single_account(account):
         
         max_retries = 3
         for attempt in range(max_retries):
-            # 访问 Gemini Business（与 Linux 版本保持一致）
+            # 访问 Gemini Business
             log(f"   打开 Gemini Business... (尝试 {attempt + 1}/{max_retries})")
             page.get("https://business.gemini.google/", timeout=30)
-            time.sleep(3)  # 固定等待 3 秒，与 Linux 版本一致
+            time.sleep(3)
             page.get_screenshot(path=f"screenshots/{account_id}_01_landing.png")
             
-            # 输入邮箱（简化版，与 Linux 版本一致，不触发额外 JS 事件）
+            # 输入邮箱
             log("   输入邮箱...")
             email_input = page.ele('#email-input', timeout=3) or \
                           page.ele('css:input[name="loginHint"]', timeout=2) or \
@@ -388,7 +390,7 @@ def refresh_single_account(account):
             time.sleep(0.5)
             page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
             
-            # 点击继续按钮（与 Linux 版本一致）
+            # 点击继续按钮
             log("   等待按钮可点击...")
             continue_btn = page.ele('text:使用邮箱继续', timeout=2) or \
                            page.ele('text:Continue with email', timeout=2) or \
@@ -397,11 +399,11 @@ def refresh_single_account(account):
                 log("   点击'使用邮箱继续'按钮...")
                 continue_btn.click()
                 log("   ✅ 已点击按钮")
-            time.sleep(3)  # 固定等待 3 秒
+            time.sleep(3)
             log("   等待页面响应...")
             page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
-            # 检查是否遇到错误页面（与 Linux 版本完全一致）
+            # 检查是否遇到错误页面
             error_elem = page.ele('text:请试试其他方法', timeout=2) or \
                          page.ele('text:Let\'s try something else', timeout=2)
             if error_elem:
@@ -414,7 +416,7 @@ def refresh_single_account(account):
                         page.quit()
                     return False, None
                 
-                # 点击重试按钮（与 Linux 版本一致）
+                # 点击重试按钮
                 retry_btn = page.ele('text:注册或登录', timeout=2) or \
                             page.ele('text:Sign up or sign in', timeout=2)
                 if retry_btn:
@@ -422,10 +424,10 @@ def refresh_single_account(account):
                     time.sleep(2)
                 continue
             
-            # 等待验证码输入框（修复：增加等待时间到 30 秒，与 Linux 版本一致）
+            # 等待验证码输入框
             log("   等待验证码输入框... (最长 30 秒)")
             code_input = None
-            for _ in range(30):  # 30 次 × 1 秒 = 30 秒
+            for _ in range(30):
                 code_input = page.ele('css:input[name="pinInput"]', timeout=1) or \
                              page.ele('css:input[type="tel"]', timeout=1)
                 if code_input:
@@ -433,7 +435,7 @@ def refresh_single_account(account):
                 time.sleep(1)
             
             if code_input:
-                log("   ✅ 检测到验证码页面")  # 新增：确认成功进入验证码流程
+                log("   ✅ 检测到验证码页面")
                 break  # 找到验证码输入框，退出重试循环
             else:
                 if attempt < max_retries - 1:
@@ -453,105 +455,35 @@ def refresh_single_account(account):
                 page.quit()
             return False, None
         
-        # 重新获取验证码输入框（可能已过期）
-        code_input = page.ele('css:input[name="pinInput"]', timeout=3) or \
-                     page.ele('css:input[type="tel"]', timeout=2)
-        if not code_input:
-            log("   ❌ 验证码输入框已失效")
-            if page:
-                page.quit()
-            return False, None
-        
         # 输入验证码
         log("   输入验证码...")
         code_input.click()
-        time.sleep(0.2)
         code_input.clear()
         code_input.input(code)
-        time.sleep(0.3)
+        time.sleep(0.5)
         
-        # 触发 JS 事件（按照注册机方式）
-        try:
-            page.run_js('''
-                let el = document.querySelector("input[name=pinInput]") || document.querySelector("input[type=tel]");
-                if(el) {
-                    el.dispatchEvent(new Event("input", {bubbles: true}));
-                    el.dispatchEvent(new Event("change", {bubbles: true}));
-                }
-            ''')
-        except:
-            pass
-        
-        # 点击验证按钮（按照注册机方式）
+        # 点击验证按钮
         log("   点击验证按钮...")
-        buttons = page.eles('tag:button')
+        buttons = page.eles('css:button')
         for btn in buttons:
-            btn_text = btn.text.strip() if btn.text else ""
-            if btn_text and "重新" not in btn_text and "发送" not in btn_text and "resend" not in btn_text.lower():
-                try:
-                    btn.click()
-                except:
-                    btn.click(by_js=True)
+            btn_text = btn.text or ""
+            if "重新" not in btn_text and "发送" not in btn_text:
+                btn.click()
                 break
         
-        # 等待登录完成（增强版检测）
+        # 等待登录完成
         log("   等待登录完成...")
-        login_complete = False
-        for i in range(40):  # 增加等待时间到 40 秒
+        for _ in range(30):
             time.sleep(1)
-            page_text = page.html or ""
-            current_url = page.url or ""
+            page_text = page.html
+            current_url = page.url
             
-            # 每 10 秒输出一次调试信息
-            if i > 0 and i % 10 == 0:
-                log(f"   [调试] 等待 {i} 秒，当前 URL: {current_url[:80]}...")
-            
-            # 检查是否还在登录中
             if "正在登录" in page_text or "Signing in" in page_text:
                 continue
             
-            # 检查是否还在验证码页面
-            if "verify-oob-code" in current_url or "验证码" in page_text or "pinInput" in page_text:
-                continue
-            
-            # 检查是否登录成功 - 多种条件
-            # 条件 1: URL 包含 /cid/
-            if '/cid/' in current_url:
-                log("   ✅ 登录成功，URL 包含 /cid/")
-                login_complete = True
+            if '/cid/' in current_url or "免费试用" in page_text:
+                log("   ✅ 登录成功")
                 break
-            
-            # 条件 2: URL 是 business.gemini.google 主页
-            if 'business.gemini.google' in current_url and '/home' in current_url:
-                log("   ✅ 登录成功，已跳转到主页")
-                login_complete = True
-                break
-            
-            # 条件 3: 页面包含主页关键词
-            if "免费试用" in page_text or "全名" in page_text or "新对话" in page_text:
-                log("   ✅ 登录成功，检测到主页面")
-                login_complete = True
-                break
-            
-            # 条件 4: 检测到 Cookie 已存在（说明登录成功）
-            try:
-                cookies = page.cookies()
-                for c in cookies:
-                    if c.get('name') == '__Secure-C_SES' and c.get('value'):
-                        # 再等 2 秒让页面完全加载
-                        time.sleep(2)
-                        log("   ✅ 登录成功，检测到 Cookie")
-                        login_complete = True
-                        break
-                if login_complete:
-                    break
-            except:
-                pass
-        
-        if not login_complete:
-            log(f"   ⚠️ 登录状态不确定，当前 URL: {current_url[:80]}...")
-        
-        time.sleep(3)  # 额外等待确保页面加载完成
         
         # 提取 Cookie 和 URL 参数
         current_url = page.url
@@ -570,18 +502,14 @@ def refresh_single_account(account):
             if idx + 1 < len(path_parts):
                 config_id = path_parts[idx + 1]
         
-        # 从 Cookie 提取 secure_c_ses、host_c_oses 和过期时间
+        # 从 Cookie 提取 secure_c_ses 和 host_c_oses
         secure_c_ses = ""
         host_c_oses = ""
-        expires_timestamp = None  # Cookie 的 expirationDate（Unix 时间戳）
         for c in cookies:
             name = c.get('name', '')
             value = c.get('value', '')
             if name == '__Secure-C_SES':
                 secure_c_ses = value
-                # 尝试获取 Cookie 的过期时间戳（DrissionPage 可能返回 expirationDate 或 expiry）
-                expires_timestamp = c.get('expirationDate') or c.get('expiry') or c.get('expires')
-                log(f"   [Cookie 原始过期字段] expirationDate={c.get('expirationDate')}, expiry={c.get('expiry')}, expires={c.get('expires')}")
             elif name == '__Host-C_OSES':
                 host_c_oses = value
         
@@ -591,22 +519,6 @@ def refresh_single_account(account):
                 page.quit()
             return False, None
         
-        # 计算过期时间（转换为北京时间）
-        # 公式：如果有 Cookie 过期时间戳，转换为北京时间；否则使用 当前北京时间 + 24 小时
-        from datetime import timezone
-        beijing_tz = timezone(timedelta(hours=8))
-        
-        if expires_timestamp and isinstance(expires_timestamp, (int, float)):
-            # Cookie 的 expirationDate 是 UTC 时间戳，直接转换为北京时间
-            utc_dt = datetime.fromtimestamp(expires_timestamp, tz=timezone.utc)
-            beijing_dt = utc_dt.astimezone(beijing_tz)
-            expires_at = beijing_dt.strftime("%Y-%m-%d %H:%M:%S")
-            log(f"   [Cookie 过期时间-北京] {expires_at}（来自 Cookie）")
-        else:
-            # 无法获取 Cookie 过期时间，使用默认值：当前北京时间 + 24 小时
-            expires_at = (datetime.now(beijing_tz) + timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
-            log(f"   [Cookie 过期时间-北京] {expires_at}（默认 +24h）")
-        
         # 构造新的账号数据
         new_account = {
             "id": email,
@@ -615,7 +527,7 @@ def refresh_single_account(account):
             "config_id": config_id or account.get('config_id', ''),
             "secure_c_ses": secure_c_ses,
             "host_c_oses": host_c_oses,
-            "expires_at": expires_at
+            "expires_at": (datetime.now() + timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
         }
         
         log("   ✅ 刷新成功！")
