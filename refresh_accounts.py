@@ -17,10 +17,6 @@ import sys
 import io
 from datetime import datetime, timedelta
 
-# 修复 Windows 编码问题（支持中文和 emoji）
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # 禁用 SSL 警告（避免日志刷屏）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -341,10 +337,6 @@ def refresh_single_account(account):
     
     # 配置浏览器（与 Linux 版本一致）
     co = ChromiumOptions()
-    # Windows 环境必须使用 headless 模式（GitHub Actions 无 GUI）
-    import sys
-    if sys.platform == 'win32':
-        co.set_argument('--headless=new')
     co.set_argument('--incognito')
     if PROXY_URL:
         log(f"   使用代理: {PROXY_URL}")
