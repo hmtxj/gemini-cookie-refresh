@@ -1,0 +1,120 @@
+name: 刷新 Gemini Business Cookie
+
+on:
+  # 定时执行：每 10 小时运行一次
+  schedule:
+    - cron: '0 */10 * * *'
+  # 手动触发
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: 安装 Chrome 和 Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+      
+      - name: 安装 Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+      
+      - name: 安装依赖
+        run: |
+          pip install DrissionPage requests huggingface_hub psycopg2-binary pyyaml
+          google-chrome --version || echo "Chrome not found"
+      
+      # 从 Secret 恢复 Clash 配置并启动代理
+      - name: 设置代理
+        env:
+          CLASH_CONFIG: ${{ secrets.CLASH_CONFIG }}
+        run: |
+          echo "📦 下载 mihomo (Clash Meta)..."
+          wget -q https://github.com/MetaCubeX/mihomo/releases/download/v1.18.10/mihomo-linux-amd64-v1.18.10.gz -O mihomo.gz || \
+          wget -q https://mirror.ghproxy.com/https://github.com/MetaCubeX/mihomo/releases/download/v1.18.10/mihomo-linux-amd64-v1.18.10.gz -O mihomo.gz
+          gunzip mihomo.gz
+          chmod +x mihomo
+          
+          echo "📝 从 Secret 恢复 Clash 配置..."
+          printf '%s' "$CLASH_CONFIG" > local.yaml
+          
+          echo "📝 配置文件内容（脱敏）:"
+          head -30 local.yaml | sed 's/password:.*/password: ***/' | sed 's/uuid:.*/uuid: ***/'
+          
+          echo ""
+          echo "📝 修改配置..."
+          python3 update_clash_config.py local.yaml
+          
+          echo ""
+          echo "🚀 启动代理..."
+          ./mihomo -f local.yaml > clash.log 2>&1 &
+          MIHOMO_PID=$!
+          echo "Mihomo PID: $MIHOMO_PID"
+          sleep 8
+          
+          echo ""
+          echo "📋 Clash 启动日志:"
+          cat clash.log
+          
+          echo ""
+          echo "🔍 验证代理..."
+          echo "📍 GitHub Actions 原始 IP (不走代理):"
+          curl -s https://api.ipify.org && echo ""
+          
+          echo ""
+          echo "📍 通过代理的 IP (代理节点):"
+          curl -s --proxy http://127.0.0.1:7890 --connect-timeout 15 https://api.ipify.org && echo "" || echo "代理连接失败"
+          
+          echo ""
+          echo "📍 通过代理访问 Google:"
+          curl -s --proxy http://127.0.0.1:7890 --connect-timeout 15 -o /dev/null -w "HTTP %{http_code}" https://www.google.com && echo "" || echo "失败"
+      
+      - name: 从 Secret 恢复 accounts.json
+        env:
+          ACCOUNTS_JSON: ${{ secrets.ACCOUNTS_JSON }}
+        run: |
+          printf '%s' "$ACCOUNTS_JSON" > accounts.json
+          echo "accounts.json 内容长度: $(wc -c < accounts.json) 字节"
+      
+      - name: 运行刷新脚本
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PROXY_URL: http://127.0.0.1:7890
+          DISPLAY: ":99"
+        run: |
+          # 启动虚拟显示器
+          echo "🖥️ 启动 Xvfb 虚拟显示器..."
+          Xvfb :99 -screen 0 1920x1080x24 &
+          sleep 2
+          
+          # 运行脚本
+          python refresh_accounts.py --force
+      
+      - name: 上传调试截图
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/
+          if-no-files-found: ignore
+      
+      - name: 更新 Secret 中的 accounts.json
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          gh secret set ACCOUNTS_JSON < accounts.json

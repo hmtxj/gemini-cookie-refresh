@@ -1,0 +1,26 @@
+__pycache__/
+venv/
+.idea/
+.claude/
+
+# Clash
+local.yaml
+config_runtime.yaml
+clash.exe
+
+# Logs
+log.txt
+*.log
+
+# Results
+result.csv
+accounts.json
+
+# System
+.DS_Store
+Thumbs.db
+
+# Generated
+clash_*.txt
+screenshots/
+.vscode/

@@ -1,0 +1,121 @@
+name: 刷新 Gemini Business Cookie（Windows）
+
+on:
+  # 手动触发
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: windows-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: 安装 Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+      
+      - name: 安装依赖
+        run: |
+          pip install DrissionPage requests huggingface_hub psycopg2-binary pyyaml
+          chrome --version 2>$null || echo "Chrome installed via action"
+      
+      # 从 Secret 恢复 Clash 配置并启动代理
+      # 从 Secret 恢复 Clash 配置并启动代理
+      # 从 Secret 恢复 Clash 配置并启动代理，然后在同一 Step 中运行脚本
+      - name: 启动代理并运行脚本 (合并步骤)
+        env:
+          CLASH_CONFIG: ${{ secrets.CLASH_CONFIG }}
+          ACCOUNTS_JSON: ${{ secrets.ACCOUNTS_JSON }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PROXY_URL: http://127.0.0.1:7890
+          PYTHONIOENCODING: utf-8
+        shell: pwsh
+        run: |
+          # === 1. 环境准备 ===
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          $env:PYTHONIOENCODING = "utf-8"
+          $env:DISPLAY = ":99"  # 虽然 Windows 不用 Xvfb，但也设置一下防干扰
+
+          # === 2. 恢复 accounts.json ===
+          Write-Host "📂 恢复 accounts.json..."
+          $env:ACCOUNTS_JSON | Out-File -FilePath accounts.json -Encoding utf8 -NoNewline
+          $size = (Get-Item accounts.json).Length
+          Write-Host "   已恢复 ($size 字节)"
+
+          # === 3. 下载并配置 Clash ===
+          Write-Host "📦 下载 mihomo (Clash Meta)..."
+          $url = "https://github.com/MetaCubeX/mihomo/releases/download/v1.18.10/mihomo-windows-amd64-v1.18.10.zip"
+          $mirrorUrl = "https://mirror.ghproxy.com/$url"
+          try {
+              Invoke-WebRequest -Uri $url -OutFile mihomo.zip -TimeoutSec 60
+          } catch {
+              Write-Host "   使用镜像下载..."
+              Invoke-WebRequest -Uri $mirrorUrl -OutFile mihomo.zip -TimeoutSec 60
+          }
+          Expand-Archive -Path mihomo.zip -DestinationPath . -Force
+          Move-Item -Path "mihomo-windows-amd64.exe" -Destination "mihomo.exe" -Force
+          
+          Write-Host "📝 配置 Clash..."
+          $env:CLASH_CONFIG | Out-File -FilePath local.yaml -Encoding utf8 -NoNewline
+          python update_clash_config.py local.yaml
+          
+          # === 4. 启动代理 ===
+          Write-Host "🚀 启动代理进程..."
+          Start-Process -FilePath ".\mihomo.exe" -ArgumentList "-f", "local.yaml" -RedirectStandardOutput "clash.log" -RedirectStandardError "clash_err.log" -NoNewWindow
+          
+          Write-Host "⏳ 等待代理端口 (7890)..."
+          $retry = 0
+          while ($retry -lt 30) {
+              $conn = Test-NetConnection -ComputerName 127.0.0.1 -Port 7890 -InformationLevel Quiet
+              if ($conn) {
+                  Write-Host "✅ 端口已开放"
+                  break
+              }
+              Start-Sleep -Seconds 1
+              $retry++
+          }
+          if (-not $conn) {
+              Write-Host "❌ 代理启动超时"
+              Get-Content clash_err.log
+              exit 1
+          }
+
+          # === 5. 验证代理 ===
+          Write-Host "🔍 验证代理连通性..."
+          try {
+              $ip = (Invoke-WebRequest -Uri "https://api.ipify.org" -Proxy "http://127.0.0.1:7890" -TimeoutSec 10).Content
+              Write-Host "   IP: $ip"
+          } catch {
+              Write-Host "   ⚠️ 代理验证请求失败 (可能是网络波动，继续尝试运行脚本)"
+          }
+
+          # === 6. 运行 Python 脚本 ===
+          Write-Host "🐍 运行刷新脚本..."
+          python refresh_accounts.py --force
+      
+      - name: 上传调试截图
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-windows
+          path: screenshots/
+          if-no-files-found: ignore
+      
+      - name: 更新 Secret 中的 accounts.json
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        shell: pwsh
+        run: |
+          Get-Content accounts.json | gh secret set ACCOUNTS_JSON

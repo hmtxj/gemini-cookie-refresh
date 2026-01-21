@@ -1,0 +1,257 @@
+allow-lan: true
+external-controller: 127.0.0.1:9090
+mixed-port: 7890
+mode: global
+proxies:
+- name: 香港专线02|BGP|流媒体
+  password: c85732a3-0720-4e65-b008-97b65a30c39d
+  port: 60000
+  ports: 60000
+  server: aws-linkhy2.liangxin1.xyz
+  skip-cert-verify: true
+  sni: iosapps.itunes.apple.com
+  type: hysteria2
+- name: 香港专线03|BGP|流媒体
+  password: c85732a3-0720-4e65-b008-97b65a30c39d
+  port: 443
+  ports: 443
+  server: aws-linkhy3.liangxin1.xyz
+  skip-cert-verify: true
+  sni: iosapps.itunes.apple.com
+  type: hysteria2
+- name: 新加坡专线02|BGP|流媒体
+  password: c85732a3-0720-4e65-b008-97b65a30c39d
+  port: 60000
+  ports: 60000
+  server: aws-linkhy10.liangxin1.xyz
+  skip-cert-verify: true
+  sni: iosapps.itunes.apple.com
+  type: hysteria2
+- name: 新加坡专线03|BGP|流媒体
+  password: c85732a3-0720-4e65-b008-97b65a30c39d
+  port: 443
+  ports: 443
+  server: aws-linkhy11.liangxin1.xyz
+  skip-cert-verify: true
+  sni: iosapps.itunes.apple.com
+  type: hysteria2
+- name: 日本专线01|BGP|流媒体
+  password: c85732a3-0720-4e65-b008-97b65a30c39d
+  port: 60000
+  ports: 60000
+  server: aws-linkhy15.liangxin1.xyz
+  skip-cert-verify: true
+  sni: bilibili-jp.biliimg.com
+  type: hysteria2
+- name: 日本专线02|BGP|流媒体
+  password: c85732a3-0720-4e65-b008-97b65a30c39d
+  port: 443
+  ports: 443
+  server: aws-linkhy16.liangxin1.xyz
+  skip-cert-verify: true
+  sni: bilibili-jp2.biliimg.com
+  type: hysteria2
+- name: 日本专线03|BGP|流媒体
+  password: c85732a3-0720-4e65-b008-97b65a30c39d
+  port: 443
+  ports: 443
+  server: aws-linkhy17.liangxin1.xyz
+  skip-cert-verify: true
+  sni: bilibili-jp3.biliimg.com
+  type: hysteria2
+- name: 韩国专线01|BGP|流媒体
+  password: c85732a3-0720-4e65-b008-97b65a30c39d
+  port: 443
+  ports: 443
+  server: aws-linkhy21.liangxin1.xyz
+  skip-cert-verify: true
+  sni: bilibili-kr.biliimg.com
+  type: hysteria2
+- name: 台湾专线01|BGP|流媒体
+  password: c85732a3-0720-4e65-b008-97b65a30c39d
+  port: 443
+  ports: 443
+  server: aws-linkhy23.liangxin1.xyz
+  skip-cert-verify: true
+  sni: bilibili-tw.biliimg.com
+  type: hysteria2
+- name: 美国01|流媒体
+  password: c85732a3-0720-4e65-b008-97b65a30c39d
+  port: 443
+  ports: 443
+  server: 203.10.97.121
+  skip-cert-verify: true
+  sni: www.apple.com
+  type: hysteria2
+- name: 美国02|流媒体 0.1x
+  password: c85732a3-0720-4e65-b008-97b65a30c39d
+  port: 443
+  ports: 443
+  server: aws-linkhy27.liangxin1.xyz
+  skip-cert-verify: true
+  sni: www.apple.com
+  type: hysteria2
+proxy-groups:
+- name: 🔰 节点选择
+  proxies:
+  - ♻️ 自动选择
+  - 🎯 全球直连
+  - 香港专线02|BGP|流媒体
+  - 香港专线03|BGP|流媒体
+  - 新加坡专线02|BGP|流媒体
+  - 新加坡专线03|BGP|流媒体
+  - 日本专线01|BGP|流媒体
+  - 日本专线02|BGP|流媒体
+  - 日本专线03|BGP|流媒体
+  - 韩国专线01|BGP|流媒体
+  - 台湾专线01|BGP|流媒体
+  - 美国01|流媒体
+  - 美国02|流媒体 0.1x
+  type: select
+- interval: 300
+  name: ♻️ 自动选择
+  proxies:
+  - 香港专线02|BGP|流媒体
+  - 香港专线03|BGP|流媒体
+  - 新加坡专线02|BGP|流媒体
+  - 新加坡专线03|BGP|流媒体
+  - 日本专线01|BGP|流媒体
+  - 日本专线02|BGP|流媒体
+  - 日本专线03|BGP|流媒体
+  - 韩国专线01|BGP|流媒体
+  - 台湾专线01|BGP|流媒体
+  - 美国01|流媒体
+  - 美国02|流媒体 0.1x
+  type: url-test
+  url: http://www.gstatic.com/generate_204
+- name: 🎥 NETFLIX
+  proxies:
+  - 🔰 节点选择
+  - ♻️ 自动选择
+  - 🎯 全球直连
+  - 香港专线02|BGP|流媒体
+  - 香港专线03|BGP|流媒体
+  - 新加坡专线02|BGP|流媒体
+  - 新加坡专线03|BGP|流媒体
+  - 日本专线01|BGP|流媒体
+  - 日本专线02|BGP|流媒体
+  - 日本专线03|BGP|流媒体
+  - 韩国专线01|BGP|流媒体
+  - 台湾专线01|BGP|流媒体
+  - 美国01|流媒体
+  - 美国02|流媒体 0.1x
+  type: select
+- name: ⛔️ 广告拦截
+  proxies:
+  - 🛑 全球拦截
+  - 🎯 全球直连
+  - 🔰 节点选择
+  type: select
+- name: 🚫 运营劫持
+  proxies:
+  - 🛑 全球拦截
+  - 🎯 全球直连
+  - 🔰 节点选择
+  type: select
+- name: 🌍 国外媒体
+  proxies:
+  - 🔰 节点选择
+  - ♻️ 自动选择
+  - 🎯 全球直连
+  - 香港专线02|BGP|流媒体
+  - 香港专线03|BGP|流媒体
+  - 新加坡专线02|BGP|流媒体
+  - 新加坡专线03|BGP|流媒体
+  - 日本专线01|BGP|流媒体
+  - 日本专线02|BGP|流媒体
+  - 日本专线03|BGP|流媒体
+  - 韩国专线01|BGP|流媒体
+  - 台湾专线01|BGP|流媒体
+  - 美国01|流媒体
+  - 美国02|流媒体 0.1x
+  type: select
+- name: 🌏 国内媒体
+  proxies:
+  - 🎯 全球直连
+  - 香港专线02|BGP|流媒体
+  - 香港专线03|BGP|流媒体
+  - 台湾专线01|BGP|流媒体
+  - 🔰 节点选择
+  type: select
+- name: Ⓜ️ 微软服务
+  proxies:
+  - 🎯 全球直连
+  - 🔰 节点选择
+  - 香港专线02|BGP|流媒体
+  - 香港专线03|BGP|流媒体
+  - 新加坡专线02|BGP|流媒体
+  - 新加坡专线03|BGP|流媒体
+  - 日本专线01|BGP|流媒体
+  - 日本专线02|BGP|流媒体
+  - 日本专线03|BGP|流媒体
+  - 韩国专线01|BGP|流媒体
+  - 台湾专线01|BGP|流媒体
+  - 美国01|流媒体
+  - 美国02|流媒体 0.1x
+  type: select
+- name: 📲 电报信息
+  proxies:
+  - 🔰 节点选择
+  - 🎯 全球直连
+  - 香港专线02|BGP|流媒体
+  - 香港专线03|BGP|流媒体
+  - 新加坡专线02|BGP|流媒体
+  - 新加坡专线03|BGP|流媒体
+  - 日本专线01|BGP|流媒体
+  - 日本专线02|BGP|流媒体
+  - 日本专线03|BGP|流媒体
+  - 韩国专线01|BGP|流媒体
+  - 台湾专线01|BGP|流媒体
+  - 美国01|流媒体
+  - 美国02|流媒体 0.1x
+  type: select
+- name: 🍎 苹果服务
+  proxies:
+  - 🔰 节点选择
+  - 🎯 全球直连
+  - ♻️ 自动选择
+  - 香港专线02|BGP|流媒体
+  - 香港专线03|BGP|流媒体
+  - 新加坡专线02|BGP|流媒体
+  - 新加坡专线03|BGP|流媒体
+  - 日本专线01|BGP|流媒体
+  - 日本专线02|BGP|流媒体
+  - 日本专线03|BGP|流媒体
+  - 韩国专线01|BGP|流媒体
+  - 台湾专线01|BGP|流媒体
+  - 美国01|流媒体
+  - 美国02|流媒体 0.1x
+  type: select
+- name: 🎯 全球直连
+  proxies:
+  - DIRECT
+  type: select
+- name: 🛑 全球拦截
+  proxies:
+  - REJECT
+  - DIRECT
+  type: select
+- name: 🐟 漏网之鱼
+  proxies:
+  - 🔰 节点选择
+  - 🎯 全球直连
+  - ♻️ 自动选择
+  - 香港专线02|BGP|流媒体
+  - 香港专线03|BGP|流媒体
+  - 新加坡专线02|BGP|流媒体
+  - 新加坡专线03|BGP|流媒体
+  - 日本专线01|BGP|流媒体
+  - 日本专线02|BGP|流媒体
+  - 日本专线03|BGP|流媒体
+  - 韩国专线01|BGP|流媒体
+  - 台湾专线01|BGP|流媒体
+  - 美国01|流媒体
+  - 美国02|流媒体 0.1x
+  type: select
+rules:
+- MATCH,DIRECT
