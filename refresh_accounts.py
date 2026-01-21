@@ -15,6 +15,13 @@ import requests
 import urllib3
 import sys
 import io
+
+# 强制 UTF-8 输出，防止 Windows 控制台打印 Emoji 报错
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+except AttributeError:
+    pass
 from datetime import datetime, timedelta
 
 

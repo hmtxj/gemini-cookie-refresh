@@ -5,6 +5,14 @@ import yaml
 import sys
 import random
 
+# 强制 UTF-8 输出，防止 Windows 控制台打印 Emoji 报错
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+except AttributeError:
+    # Python 3.6+ 支持 reconfigure，旧版本可能不支持，但在 GitHub Actions (Py3.11) 上没问题
+    pass
+
 config_file = sys.argv[1] if len(sys.argv) > 1 else 'config.yaml'
 
 try:
