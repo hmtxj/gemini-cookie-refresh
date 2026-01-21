@@ -563,10 +563,6 @@ def refresh_all_accounts(force=False):
         log(f"\n[{i}/{len(accounts)}] {email}")
         
         # 检查是否需要刷新
-        # if not force and remaining and remaining > 2:
-        #     log(f"   跳过（剩余 {remaining:.1f} 小时，无需刷新）")
-        #     updated_accounts.append(account)
-        #     continue
         
         if not account.get('mail_password'):
             log(f"   ⚠️ 无 mail_password，无法刷新")
