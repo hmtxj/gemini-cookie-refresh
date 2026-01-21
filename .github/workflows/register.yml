@@ -47,19 +47,7 @@ jobs:
           # 循环运行脚本
           python register_account.py --count ${{ inputs.count }}
           
-      - name: 上传新账号到 Secret
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
-        shell: pwsh
-        run: |
-          if (Test-Path accounts.json) {
-              # 读取现有 Secret
-              # 注意：这里需要合并逻辑，简化起见，直接覆盖或追加比较复杂
-              # 建议让 register_account.py 读取现有 Secret (通过 env) 并合并后输出
-              
-              # 简单方案：只上传 Artifact，手动合并
-              Write-Host "账号已生成，请检查 Artifacts"
-          }
+      # (Step removed: No automatic secret update to prevent overwriting)
           
       - name: 上传结果 Artifact
         if: always()
