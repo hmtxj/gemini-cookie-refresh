@@ -28,30 +28,47 @@ try:
     if 'rules' in config:
         del config['rules']
     
-    # 选择一个可用的代理节点（只使用美国节点）
+    # 选择一个可用的代理节点（规避不可用地区）
     selected_proxy = None
-    us_proxies = []  # 收集所有美国节点
+    available_proxies = []
+    
+    # 🔥 无法访问 Google/Gemini 的地区关键词（必须规避）
+    blocked_keywords = [
+        '中国', 'china', 'cn', '北京', '上海', '广州', '深圳',
+        '俄罗斯', 'russia', 'ru', '莫斯科',
+        '朝鲜', 'north korea', 'kp',
+        '伊朗', 'iran', 'ir',
+        '叙利亚', 'syria', 'sy',
+        '古巴', 'cuba', 'cu',
+        '克里米亚', 'crimea',
+    ]
+    
+    # 🔥 无效节点类型关键词
+    skip_keywords = ['自动选择', '故障转移', 'direct', 'reject', '剩余', '到期', '官网', '套餐', '重置', '订阅', '流量', '过期']
     
     if 'proxies' in config and config['proxies']:
-        all_names = [p.get('name', '') for p in config['proxies']]
-        
-        # 筛选美国节点
-        us_keywords = ['美国', 'us', 'usa', 'america', 'united states', '洛杉矶', 'los angeles', '硅谷', 'silicon', '纽约', 'new york', '西雅图', 'seattle', '芝加哥', 'chicago']
-        
         for p in config['proxies']:
             name = p.get('name', '')
             name_lower = name.lower()
-            if any(k in name_lower for k in us_keywords):
-                us_proxies.append(name)
+            
+            # 跳过无效节点类型
+            if any(k in name_lower for k in skip_keywords):
+                continue
+            
+            # 跳过不可用地区节点
+            is_blocked = any(k.lower() in name_lower for k in blocked_keywords)
+            if is_blocked:
+                continue
+            
+            available_proxies.append(name)
         
-        print(f"📍 找到 {len(us_proxies)} 个美国节点")
+        print(f"📍 找到 {len(available_proxies)} 个可用节点（已排除不可用地区）")
         
-        # 随机选择一个美国节点
-        if us_proxies:
-            selected_proxy = random.choice(us_proxies)
+        # 随机选择一个可用节点
+        if available_proxies:
+            selected_proxy = random.choice(available_proxies)
         else:
-            # 如果没有美国节点，选择第一个可用节点
-            print("⚠️ 未找到美国节点，使用第一个可用节点")
+            print("⚠️ 未找到可用节点，使用第一个节点")
             selected_proxy = config['proxies'][0]['name']
         
         print(f"✅ 选择代理节点: {selected_proxy}")
