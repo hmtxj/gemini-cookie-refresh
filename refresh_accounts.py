@@ -448,7 +448,7 @@ def refresh_single_account(account):
                 log("   点击'使用邮箱继续'按钮...")
                 continue_btn.click()
                 log("   ✅ 已点击按钮")
-            time.sleep(3)
+            time.sleep(10)  # 增加等待时间，确保页面加载完成
             log("   等待页面响应...")
             page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
@@ -456,7 +456,8 @@ def refresh_single_account(account):
             error_elem = page.ele('text:请试试其他方法', timeout=2) or \
                          page.ele('text:Let\'s try something else', timeout=2)
             if error_elem:
-                log(f"   ⚠️ 遇到服务器错误，重试...")
+                error_text = error_elem.text.replace('\n', ' ').strip()
+                log(f"   ⚠️ 遇到服务器错误: {error_text}")
                 page.get_screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
                 
                 if attempt >= max_retries - 1:
