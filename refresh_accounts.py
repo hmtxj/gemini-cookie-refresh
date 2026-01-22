@@ -156,6 +156,30 @@ def trigger_reload(accounts):
         log("⚠️ 未配置 HF_SPACE_URL 或 ADMIN_KEY，跳过热重载")
         return False
     
+    # 构造发送给 API 的数据副本，并将过期时间 +8 小时 (确保在 UTC 环境下生成的 JSON 到达 2API 后对应北京时间)
+    api_accounts = []
+    try:
+        import copy
+        # 使用深拷贝防止修改原数据
+        api_accounts = copy.deepcopy(accounts) 
+        
+        for acc in api_accounts:
+            expires_at = acc.get('expires_at')
+            if expires_at:
+                try:
+                    # 解析原始时间
+                    dt = datetime.strptime(expires_at, "%Y-%m-%d %H:%M:%S")
+                    # 加上 8 小时
+                    dt_plus_8 = dt + timedelta(hours=8)
+                    # 更新字段
+                    acc['expires_at'] = dt_plus_8.strftime("%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    pass # 解析失败则保持原样
+    except Exception as e:
+        log(f"⚠️ 构造 API 数据失败: {e}")
+        # 如果处理失败，就用原数据兜底
+        api_accounts = accounts
+
     try:
         # 先登录获取 session
         session = requests.Session()
@@ -175,7 +199,7 @@ def trigger_reload(accounts):
         # 调用 PUT /admin/accounts-config 更新配置并触发热重载
         update_resp = session.put(
             f"{HF_SPACE_URL}/admin/accounts-config",
-            json=accounts,
+            json=api_accounts,
             timeout=30,
             verify=False
         )
@@ -448,7 +472,7 @@ def refresh_single_account(account):
                 log("   点击'使用邮箱继续'按钮...")
                 continue_btn.click()
                 log("   ✅ 已点击按钮")
-            time.sleep(10)  # 增加等待时间，确保页面加载完成
+            time.sleep(3)
             log("   等待页面响应...")
             page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
@@ -456,8 +480,7 @@ def refresh_single_account(account):
             error_elem = page.ele('text:请试试其他方法', timeout=2) or \
                          page.ele('text:Let\'s try something else', timeout=2)
             if error_elem:
-                error_text = error_elem.text.replace('\n', ' ').strip()
-                log(f"   ⚠️ 遇到服务器错误: {error_text}")
+                log(f"   ⚠️ 遇到服务器错误，重试...")
                 page.get_screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
                 
                 if attempt >= max_retries - 1:

@@ -5,6 +5,8 @@ import json
 import os
 import requests
 import psycopg2
+from datetime import datetime, timedelta
+import copy
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 ACCOUNTS_FILE = "accounts.json"
@@ -67,12 +69,34 @@ def trigger_reload(accounts):
             print(f"❌ 登录失败: {login_resp.status_code}", flush=True)
             return False
         
-        print("✅ 登录成功", flush=True)
+        log("✅ 登录成功")
         
+        # 构造发送给 API 的数据副本，并将过期时间 +8 小时
+        api_accounts = []
+        try:
+            # 使用深拷贝防止修改原数据
+            api_accounts = copy.deepcopy(accounts) 
+            
+            for acc in api_accounts:
+                expires_at = acc.get('expires_at')
+                if expires_at:
+                    try:
+                        # 解析原始时间
+                        dt = datetime.strptime(expires_at, "%Y-%m-%d %H:%M:%S")
+                        # 加上 8 小时
+                        dt_plus_8 = dt + timedelta(hours=8)
+                        # 更新字段
+                        acc['expires_at'] = dt_plus_8.strftime("%Y-%m-%d %H:%M:%S")
+                    except Exception:
+                        pass # 解析失败则保持原样
+        except Exception as e:
+            print(f"⚠️ 构造 API 数据失败: {e}", flush=True)
+            api_accounts = accounts
+
         # 调用 PUT /admin/accounts-config 更新配置并触发热重载
         update_resp = session.put(
             f"{HF_SPACE_URL}/admin/accounts-config",
-            json=accounts,
+            json=api_accounts,
             timeout=30
         )
         
