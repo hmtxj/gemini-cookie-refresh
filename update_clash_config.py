@@ -28,9 +28,10 @@ try:
     if 'rules' in config:
         del config['rules']
     
-    # 选择一个可用的代理节点（规避不可用地区）
+    # 选择一个可用的代理节点（优先美国，规避不可用地区）
     selected_proxy = None
-    available_proxies = []
+    us_proxies = []  # 美国节点优先
+    other_proxies = []  # 其他可用节点
     
     # 🔥 无法访问 Google/Gemini 的地区关键词（必须规避）
     blocked_keywords = [
@@ -41,7 +42,12 @@ try:
         '叙利亚', 'syria', 'sy',
         '古巴', 'cuba', 'cu',
         '克里米亚', 'crimea',
+        # 🔥 香港可能被 Gemini Business 限制，暂时也规避
+        '香港', 'hong kong', 'hk',
     ]
+    
+    # 🔥 美国节点关键词
+    us_keywords = ['美国', 'us', 'usa', 'america', '洛杉矶', 'los angeles', '硅谷', 'silicon', '纽约', 'new york', '西雅图', 'seattle', '芝加哥', 'chicago']
     
     # 🔥 无效节点类型关键词
     skip_keywords = ['自动选择', '故障转移', 'direct', 'reject', '剩余', '到期', '官网', '套餐', '重置', '订阅', '流量', '过期']
@@ -60,13 +66,22 @@ try:
             if is_blocked:
                 continue
             
-            available_proxies.append(name)
+            # 分类：美国优先
+            is_us = any(k.lower() in name_lower for k in us_keywords)
+            if is_us:
+                us_proxies.append(name)
+            else:
+                other_proxies.append(name)
         
-        print(f"📍 找到 {len(available_proxies)} 个可用节点（已排除不可用地区）")
+        print(f"📍 找到 {len(us_proxies)} 个美国节点, {len(other_proxies)} 个其他可用节点")
         
-        # 随机选择一个可用节点
-        if available_proxies:
-            selected_proxy = random.choice(available_proxies)
+        # 🔥 优先选择美国节点
+        if us_proxies:
+            selected_proxy = random.choice(us_proxies)
+            print(f"✅ 选择美国节点: {selected_proxy}")
+        elif other_proxies:
+            selected_proxy = random.choice(other_proxies)
+            print(f"⚠️ 无美国节点，选择其他节点: {selected_proxy}")
         else:
             print("⚠️ 未找到可用节点，使用第一个节点")
             selected_proxy = config['proxies'][0]['name']
