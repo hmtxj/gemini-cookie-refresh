@@ -476,28 +476,8 @@ def refresh_single_account(account):
             log("   等待页面响应...")
             page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
-            # 检查是否遇到错误页面
-            error_elem = page.ele('text:请试试其他方法', timeout=2) or \
-                         page.ele('text:Let\'s try something else', timeout=2)
-            if error_elem:
-                log(f"   ⚠️ 遇到服务器错误，重试...")
-                page.get_screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
-                
-                if attempt >= max_retries - 1:
-                    log(f"   ❌ 重试 {max_retries} 次仍失败，跳过此账号")
-                    if page:
-                        page.quit()
-                    return False, None
-                
-                # 点击重试按钮
-                retry_btn = page.ele('text:注册或登录', timeout=2) or \
-                            page.ele('text:Sign up or sign in', timeout=2)
-                if retry_btn:
-                    retry_btn.click()
-                    time.sleep(2)
-                continue
-            
-            # 等待验证码输入框
+            # 优先检测验证码输入框 (最长 30 秒)
+            # 在检测错误之前检测成功信号，避免误判
             log("   等待验证码输入框... (最长 30 秒)")
             code_input = None
             for _ in range(30):
@@ -509,8 +489,31 @@ def refresh_single_account(account):
             
             if code_input:
                 log("   ✅ 检测到验证码页面")
-                break  # 找到验证码输入框，退出重试循环
+                # 成功找到输入框，不再检查错误，直接进行下一步
             else:
+                # 没找到输入框，检查是否遇到错误页面
+                error_elem = page.ele('text:请试试其他方法', timeout=2) or \
+                             page.ele('text:Let\'s try something else', timeout=2)
+                if error_elem:
+                    error_text = error_elem.text.replace('\n', ' ').strip()
+                    log(f"   ⚠️ 遇到服务器错误: {error_text}")
+                    page.get_screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
+                    
+                    if attempt >= max_retries - 1:
+                        log(f"   ❌ 重试 {max_retries} 次仍失败，跳过此账号")
+                        if page:
+                            page.quit()
+                        return False, None
+                    
+                    # 点击重试按钮
+                    retry_btn = page.ele('text:注册或登录', timeout=2) or \
+                                page.ele('text:Sign up or sign in', timeout=2)
+                    if retry_btn:
+                        retry_btn.click()
+                        time.sleep(2)
+                    continue
+
+                # 既没找到输入框，也没报错，可能是加载太慢或未知状态
                 if attempt < max_retries - 1:
                     log(f"   ⚠️ 验证码输入框未出现，重试...")
                     continue
@@ -519,6 +522,10 @@ def refresh_single_account(account):
                     if page:
                         page.quit()
                     return False, None
+            
+            # 如果成功跳出上面的逻辑，说明找到了 code_input，退出 retry 循环
+            if code_input:
+                break
         
         # 从 DuckMail 获取验证码
         code = wait_for_verification_code(email, token)
