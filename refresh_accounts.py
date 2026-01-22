@@ -38,6 +38,10 @@ PROXY_URL = os.environ.get("PROXY_URL", None)
 # 数据库配置
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 
+# HF Space 热重载配置
+HF_SPACE_URL = os.environ.get("HF_SPACE_URL", "").strip()
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "").strip()
+
 
 def log(msg):
     """打印带时间戳的日志"""
@@ -141,6 +145,52 @@ def save_accounts(accounts):
     # 如果启用数据库，同时保存到数据库
     if is_database_enabled():
         db_save_accounts(accounts)
+        
+    # 3. 触发 2api 热重载
+    trigger_reload(accounts)
+
+
+def trigger_reload(accounts):
+    """调用 2api 的 API 触发热重载"""
+    if not HF_SPACE_URL or not ADMIN_KEY:
+        log("⚠️ 未配置 HF_SPACE_URL 或 ADMIN_KEY，跳过热重载")
+        return False
+    
+    try:
+        # 先登录获取 session
+        session = requests.Session()
+        login_resp = session.post(
+            f"{HF_SPACE_URL}/login",
+            data={"admin_key": ADMIN_KEY},
+            timeout=30,
+            verify=False
+        )
+        
+        if login_resp.status_code != 200:
+            log(f"❌ 登录失败: {login_resp.status_code}")
+            return False
+        
+        log("✅ 登录成功")
+        
+        # 调用 PUT /admin/accounts-config 更新配置并触发热重载
+        update_resp = session.put(
+            f"{HF_SPACE_URL}/admin/accounts-config",
+            json=accounts,
+            timeout=30,
+            verify=False
+        )
+        
+        if update_resp.status_code == 200:
+            result = update_resp.json()
+            log(f"✅ 热重载成功: {result.get('message', '')}")
+            return True
+        else:
+            log(f"❌ 热重载失败: {update_resp.status_code} - {update_resp.text}")
+            return False
+            
+    except Exception as e:
+        log(f"❌ 热重载请求失败: {e}")
+        return False
 
 
 def get_remaining_hours(expires_at):

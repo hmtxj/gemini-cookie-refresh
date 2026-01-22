@@ -41,6 +41,8 @@ jobs:
           ACCOUNTS_JSON: ${{ secrets.ACCOUNTS_JSON }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}
+          HF_SPACE_URL: ${{ secrets.HF_SPACE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           PROXY_URL: http://127.0.0.1:7890
           PYTHONIOENCODING: utf-8
