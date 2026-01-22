@@ -453,37 +453,66 @@ def refresh_single_account(account):
             # 访问 Gemini Business
             log(f"   打开 Gemini Business... (尝试 {attempt + 1}/{max_retries})")
             page.get("https://business.gemini.google/", timeout=30)
-            time.sleep(3)
+            
+            # 🔥 等待页面完全加载
+            time.sleep(5)
+            try:
+                page.wait.doc_loaded()
+            except:
+                pass
+            
             page.get_screenshot(path=f"screenshots/{account_id}_01_landing.png")
             
-            # 输入邮箱
-            log("   输入邮箱...")
-            email_input = page.ele('#email-input', timeout=3) or \
-                          page.ele('css:input[name="loginHint"]', timeout=2) or \
-                          page.ele('css:input[type="text"]', timeout=2)
+            # 🔥 等待邮箱输入框出现
+            email_input = None
+            for _ in range(10):
+                email_input = page.ele('#email-input', timeout=1) or \
+                              page.ele('css:input[name="loginHint"]', timeout=1) or \
+                              page.ele('css:input[type="text"]', timeout=1)
+                if email_input:
+                    break
+                time.sleep(1)
+            
             if not email_input:
                 log("   ❌ 找不到邮箱输入框")
                 if attempt < max_retries - 1:
                     continue
                 return False, None
+            
+            time.sleep(1)
+            
+            # 输入邮箱
+            log("   输入邮箱...")
             email_input.click()
-            time.sleep(0.3)
-            email_input.clear()
-            email_input.input(email)
             time.sleep(0.5)
+            email_input.clear()
+            time.sleep(0.5)
+            
+            # 🔥 模拟人类输入（逐字符）
+            import random
+            for char in email:
+                email_input.input(char)
+                time.sleep(random.uniform(0.06, 0.10))
+            
+            time.sleep(1.5)
             page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
             
             # 点击继续按钮
             log("   等待按钮可点击...")
-            continue_btn = page.ele('text:使用邮箱继续', timeout=2) or \
+            time.sleep(1)
+            continue_btn = page.ele('text:使用邮箱继续', timeout=3) or \
                            page.ele('text:Continue with email', timeout=2) or \
+                           page.ele('css:button[type="submit"]', timeout=2) or \
                            page.ele('css:button', timeout=2)
             if continue_btn:
                 log("   点击'使用邮箱继续'按钮...")
+                time.sleep(0.5)
                 continue_btn.click()
                 log("   ✅ 已点击按钮")
-            time.sleep(3)
+            
+            # 🔥 等待页面响应
             log("   等待页面响应...")
+            time.sleep(5)
             page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
             # 检查是否遇到错误页面
@@ -541,12 +570,21 @@ def refresh_single_account(account):
         # 输入验证码
         log("   输入验证码...")
         code_input.click()
-        code_input.clear()
-        code_input.input(code)
         time.sleep(0.5)
+        code_input.clear()
+        time.sleep(0.5)
+        
+        # 🔥 验证码逐字符输入
+        import random
+        for char in code:
+            code_input.input(char)
+            time.sleep(random.uniform(0.08, 0.12))
+        
+        time.sleep(1)
         
         # 点击验证按钮
         log("   点击验证按钮...")
+        time.sleep(0.5)
         buttons = page.eles('css:button')
         for btn in buttons:
             btn_text = btn.text or ""
