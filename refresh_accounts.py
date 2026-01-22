@@ -291,27 +291,17 @@ def wait_for_verification_code(email, token, timeout=180):
                             # - 带 Z 后缀的 UTC 时间：2022-04-01T00:00:00.000Z
                             # - 带时区偏移的时间：2022-04-01T08:00:00+08:00
                             # - 无时区信息的时间（假设为北京时间）
-                            # - 🔥 纳秒精度时间：2026-01-22T05:57:16.758524397+00:00
                             
-                            # 🔥 预处理：截断超过 6 位的小数秒（fromisoformat 不支持纳秒）
-                            import re
-                            # 匹配小数秒部分，如果超过 6 位则截断
-                            msg_created_fixed = re.sub(
-                                r'(\.\d{6})\d+',  # 匹配 .xxxxxx 后面多余的数字
-                                r'\1',  # 只保留前 6 位
-                                msg_created
-                            )
-                            
-                            if msg_created_fixed.endswith('Z'):
+                            if msg_created.endswith('Z'):
                                 # Z 后缀表示 UTC
-                                msg_time = datetime.fromisoformat(msg_created_fixed.replace('Z', '+00:00'))
-                            elif '+' in msg_created_fixed or msg_created_fixed.count('-') > 2:
+                                msg_time = datetime.fromisoformat(msg_created.replace('Z', '+00:00'))
+                            elif '+' in msg_created or msg_created.count('-') > 2:
                                 # 已有时区偏移
-                                msg_time = datetime.fromisoformat(msg_created_fixed)
+                                msg_time = datetime.fromisoformat(msg_created)
                             else:
                                 # 无时区信息，假设为北京时间 (UTC+8)
                                 beijing_tz = timezone(timedelta(hours=8))
-                                msg_time = datetime.fromisoformat(msg_created_fixed).replace(tzinfo=beijing_tz)
+                                msg_time = datetime.fromisoformat(msg_created).replace(tzinfo=beijing_tz)
                             
                             # 统一转换为 UTC 进行比较
                             msg_time_utc = msg_time.astimezone(timezone.utc)
@@ -426,31 +416,17 @@ def refresh_single_account(account):
         log("   ❌ 需要安装 DrissionPage: pip install DrissionPage")
         return False, None
     
-    # 配置浏览器
+    # 配置浏览器（与 Linux 版本一致）
     co = ChromiumOptions()
-    
-    # 🔥 检测是否在 GitHub Actions 等 CI 环境中运行
-    is_ci = os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS')
-    if is_ci:
-        log("   检测到 CI 环境，启用 headless 模式")
-        co.set_argument('--headless=new')  # 使用新版 headless 模式
-    
     co.set_argument('--incognito')
     if PROXY_URL:
         log(f"   使用代理: {PROXY_URL}")
         co.set_argument(f'--proxy-server={PROXY_URL}')
-    
-    # 🔥 增强反检测配置
     co.set_user_agent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
     co.set_argument('--disable-blink-features=AutomationControlled')
     co.set_argument('--disable-gpu')
     co.set_argument('--no-sandbox')
     co.set_argument('--disable-dev-shm-usage')
-    co.set_argument('--window-size=1920,1080')
-    co.set_argument('--start-maximized')
-    co.set_argument('--disable-extensions')
-    co.set_argument('--disable-infobars')
-    co.set_argument('--lang=zh-CN')
     co.auto_port()
     
     page = None
@@ -477,56 +453,47 @@ def refresh_single_account(account):
             
             page.get_screenshot(path=f"screenshots/{account_id}_01_landing.png")
             
-            # 🔥 等待邮箱输入框出现
-            email_input = None
-            for _ in range(10):
-                email_input = page.ele('#email-input', timeout=1) or \
-                              page.ele('css:input[name="loginHint"]', timeout=1) or \
-                              page.ele('css:input[type="text"]', timeout=1)
-                if email_input:
-                    break
-                time.sleep(1)
-            
+            # 输入邮箱
+            log("   输入邮箱...")
+            email_input = page.ele('#email-input', timeout=3) or \
+                          page.ele('css:input[name="loginHint"]', timeout=2) or \
+                          page.ele('css:input[type="text"]', timeout=2)
             if not email_input:
                 log("   ❌ 找不到邮箱输入框")
                 if attempt < max_retries - 1:
                     continue
                 return False, None
-            
-            time.sleep(1)
-            
-            # 输入邮箱
-            log("   输入邮箱...")
             email_input.click()
             time.sleep(0.5)
             email_input.clear()
             time.sleep(0.5)
             
-            # 🔥 模拟人类输入（逐字符，慢速）
+            # 🔥 模拟人类输入（逐字符）
             import random
             for char in email:
                 email_input.input(char)
-                time.sleep(random.uniform(0.20, 0.35))  # 🔥 每个字符间隔 0.2-0.35 秒
+                time.sleep(random.uniform(0.06, 0.10))
             
             time.sleep(1.5)
             page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
             
             # 点击继续按钮
             log("   等待按钮可点击...")
-            time.sleep(1)
-            continue_btn = page.ele('text:使用邮箱继续', timeout=3) or \
+            continue_btn = page.ele('text:使用邮箱继续', timeout=2) or \
                            page.ele('text:Continue with email', timeout=2) or \
-                           page.ele('css:button[type="submit"]', timeout=2) or \
                            page.ele('css:button', timeout=2)
             if continue_btn:
                 log("   点击'使用邮箱继续'按钮...")
-                time.sleep(0.5)
                 continue_btn.click()
                 log("   ✅ 已点击按钮")
             
             # 🔥 等待页面响应
-            log("   等待页面响应...")
             time.sleep(5)
+            try:
+                page.wait.doc_loaded()
+            except:
+                pass
+            log("   等待页面响应...")
             page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
             # 检查是否遇到错误页面
@@ -764,13 +731,6 @@ if __name__ == "__main__":
     log("=" * 50)
     log("Gemini Business 账号刷新脚本")
     log("=" * 50)
-    
-    # 清理旧截图，防止累积
-    import shutil
-    if os.path.exists("screenshots"):
-        shutil.rmtree("screenshots")
-        log("🧹 已清理旧截图目录")
-    os.makedirs("screenshots", exist_ok=True)
     
     # 刷新账号
     refresh_all_accounts(force=args.force)
