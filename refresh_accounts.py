@@ -703,6 +703,13 @@ if __name__ == "__main__":
     log("Gemini Business 账号刷新脚本")
     log("=" * 50)
     
+    # 清理旧截图，防止累积
+    import shutil
+    if os.path.exists("screenshots"):
+        shutil.rmtree("screenshots")
+        log("🧹 已清理旧截图目录")
+    os.makedirs("screenshots", exist_ok=True)
+    
     # 刷新账号
     refresh_all_accounts(force=args.force)
     
