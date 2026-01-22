@@ -429,12 +429,11 @@ def refresh_single_account(account):
     # 配置浏览器
     co = ChromiumOptions()
     
-    # 🔥 不使用 headless 模式（Google 登录页面会检测 headless 浏览器并拒绝）
-    # Windows GitHub Actions runner 支持桌面会话，可以直接运行有头浏览器
-    # Linux 环境需要配合 Xvfb 虚拟显示器使用
+    # 🔥 检测是否在 GitHub Actions 等 CI 环境中运行
     is_ci = os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS')
     if is_ci:
-        log("   检测到 CI 环境，使用非 headless 模式（通过虚拟桌面）")
+        log("   检测到 CI 环境，启用 headless 模式")
+        co.set_argument('--headless=new')  # 使用新版 headless 模式
     
     co.set_argument('--incognito')
     if PROXY_URL:
@@ -503,11 +502,11 @@ def refresh_single_account(account):
             email_input.clear()
             time.sleep(0.5)
             
-            # 🔥 模拟人类输入（逐字符）
+            # 🔥 模拟人类输入（逐字符，慢速）
             import random
             for char in email:
                 email_input.input(char)
-                time.sleep(random.uniform(0.06, 0.10))
+                time.sleep(random.uniform(0.20, 0.35))  # 🔥 每个字符间隔 0.2-0.35 秒
             
             time.sleep(1.5)
             page.get_screenshot(path=f"screenshots/{account_id}_02_email_filled.png")
