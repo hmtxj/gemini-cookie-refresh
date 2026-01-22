@@ -145,8 +145,8 @@ def save_accounts(accounts):
     # 如果启用数据库，同时保存到数据库
     if is_database_enabled():
         db_save_accounts(accounts)
-        
-    # 3. 触发 2api 热重载
+    
+    # 触发 HF Space 热重载
     trigger_reload(accounts)
 
 
@@ -156,31 +156,9 @@ def trigger_reload(accounts):
         log("⚠️ 未配置 HF_SPACE_URL 或 ADMIN_KEY，跳过热重载")
         return False
     
-    # 构造发送给 API 的数据副本，并将过期时间 +8 小时 (确保在 UTC 环境下生成的 JSON 到达 2API 后对应北京时间)
-    api_accounts = []
     try:
         import copy
-        # 使用深拷贝防止修改原数据
-        api_accounts = copy.deepcopy(accounts) 
         
-        for acc in api_accounts:
-            expires_at = acc.get('expires_at')
-            if expires_at:
-                try:
-                    # 解析原始时间
-                    dt = datetime.strptime(expires_at, "%Y-%m-%d %H:%M:%S")
-                    # 加上 8 小时
-                    dt_plus_8 = dt + timedelta(hours=8)
-                    # 更新字段
-                    acc['expires_at'] = dt_plus_8.strftime("%Y-%m-%d %H:%M:%S")
-                except Exception:
-                    pass # 解析失败则保持原样
-    except Exception as e:
-        log(f"⚠️ 构造 API 数据失败: {e}")
-        # 如果处理失败，就用原数据兜底
-        api_accounts = accounts
-
-    try:
         # 先登录获取 session
         session = requests.Session()
         login_resp = session.post(
@@ -191,11 +169,33 @@ def trigger_reload(accounts):
         )
         
         if login_resp.status_code != 200:
-            log(f"❌ 登录失败: {login_resp.status_code}")
+            log(f"❌ 热重载登录失败: {login_resp.status_code}")
             return False
         
-        log("✅ 登录成功")
+        log("✅ 热重载登录成功")
         
+        # 构造发送给 API 的数据副本，并将过期时间 +8 小时 (确保在 UTC 环境下生成的 JSON 到达 2API 后对应北京时间)
+        api_accounts = []
+        try:
+            # 使用深拷贝防止修改原数据
+            api_accounts = copy.deepcopy(accounts) 
+            
+            for acc in api_accounts:
+                expires_at = acc.get('expires_at')
+                if expires_at:
+                    try:
+                        # 解析原始时间
+                        dt = datetime.strptime(expires_at, "%Y-%m-%d %H:%M:%S")
+                        # 加上 8 小时
+                        dt_plus_8 = dt + timedelta(hours=8)
+                        # 更新字段
+                        acc['expires_at'] = dt_plus_8.strftime("%Y-%m-%d %H:%M:%S")
+                    except Exception:
+                        pass # 解析失败则保持原样
+        except Exception as e:
+            log(f"⚠️ 构造 API 数据失败: {e}")
+            api_accounts = accounts
+
         # 调用 PUT /admin/accounts-config 更新配置并触发热重载
         update_resp = session.put(
             f"{HF_SPACE_URL}/admin/accounts-config",
@@ -476,8 +476,28 @@ def refresh_single_account(account):
             log("   等待页面响应...")
             page.get_screenshot(path=f"screenshots/{account_id}_03_after_continue.png")
             
-            # 优先检测验证码输入框 (最长 30 秒)
-            # 在检测错误之前检测成功信号，避免误判
+            # 检查是否遇到错误页面
+            error_elem = page.ele('text:请试试其他方法', timeout=2) or \
+                         page.ele('text:Let\'s try something else', timeout=2)
+            if error_elem:
+                log(f"   ⚠️ 遇到服务器错误，重试...")
+                page.get_screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
+                
+                if attempt >= max_retries - 1:
+                    log(f"   ❌ 重试 {max_retries} 次仍失败，跳过此账号")
+                    if page:
+                        page.quit()
+                    return False, None
+                
+                # 点击重试按钮
+                retry_btn = page.ele('text:注册或登录', timeout=2) or \
+                            page.ele('text:Sign up or sign in', timeout=2)
+                if retry_btn:
+                    retry_btn.click()
+                    time.sleep(2)
+                continue
+            
+            # 等待验证码输入框
             log("   等待验证码输入框... (最长 30 秒)")
             code_input = None
             for _ in range(30):
@@ -489,40 +509,16 @@ def refresh_single_account(account):
             
             if code_input:
                 log("   ✅ 检测到验证码页面")
-                # 成功找到输入框，不再检查错误，直接进行下一步
+                break  # 找到验证码输入框，退出重试循环
             else:
-                # 没找到输入框，不再瞎猜"服务器错误"，而是直接打印页面状态供调试
-                log(f"   ❌ 未找到验证码输入框")
-                
-                # 打印详细诊断信息
-                try:
-                    title = page.title
-                    url = page.url
-                    # 获取 body 文本，去除多余换行
-                    body_elem = page.ele('tag:body')
-                    body_text = body_elem.text.replace('\n', ' ') if body_elem else "No body element"
-                    if len(body_text) > 100:
-                        body_text = body_text[:100] + "..."
-                    
-                    log(f"   [诊断] 标题: {title}")
-                    log(f"   [诊断] URL: {url}")
-                    log(f"   [诊断] 页面文本(前100字): {body_text}")
-                except Exception as e:
-                    log(f"   [诊断] 获取页面信息失败: {e}")
-
-                page.get_screenshot(path=f"screenshots/{account_id}_unknown_fail_{attempt+1}.png")
-
                 if attempt < max_retries - 1:
-                    log(f"   ⚠️ 重试...")
+                    log(f"   ⚠️ 验证码输入框未出现，重试...")
                     continue
                 else:
+                    log(f"   ❌ 验证码输入框始终未出现")
                     if page:
                         page.quit()
                     return False, None
-            
-            # 如果成功跳出上面的逻辑，说明找到了 code_input，退出 retry 循环
-            if code_input:
-                break
         
         # 从 DuckMail 获取验证码
         code = wait_for_verification_code(email, token)
@@ -641,10 +637,6 @@ def refresh_all_accounts(force=False):
         log(f"\n[{i}/{len(accounts)}] {email}")
         
         # 检查是否需要刷新
-        if not force and remaining and remaining > 2:
-            log(f"   跳过（剩余 {remaining:.1f} 小时，无需刷新）")
-            updated_accounts.append(account)
-            continue
         
         if not account.get('mail_password'):
             log(f"   ⚠️ 无 mail_password，无法刷新")
