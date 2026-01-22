@@ -291,17 +291,27 @@ def wait_for_verification_code(email, token, timeout=180):
                             # - 带 Z 后缀的 UTC 时间：2022-04-01T00:00:00.000Z
                             # - 带时区偏移的时间：2022-04-01T08:00:00+08:00
                             # - 无时区信息的时间（假设为北京时间）
+                            # - 🔥 纳秒精度时间：2026-01-22T05:57:16.758524397+00:00
                             
-                            if msg_created.endswith('Z'):
+                            # 🔥 预处理：截断超过 6 位的小数秒（fromisoformat 不支持纳秒）
+                            import re
+                            # 匹配小数秒部分，如果超过 6 位则截断
+                            msg_created_fixed = re.sub(
+                                r'(\.\d{6})\d+',  # 匹配 .xxxxxx 后面多余的数字
+                                r'\1',  # 只保留前 6 位
+                                msg_created
+                            )
+                            
+                            if msg_created_fixed.endswith('Z'):
                                 # Z 后缀表示 UTC
-                                msg_time = datetime.fromisoformat(msg_created.replace('Z', '+00:00'))
-                            elif '+' in msg_created or msg_created.count('-') > 2:
+                                msg_time = datetime.fromisoformat(msg_created_fixed.replace('Z', '+00:00'))
+                            elif '+' in msg_created_fixed or msg_created_fixed.count('-') > 2:
                                 # 已有时区偏移
-                                msg_time = datetime.fromisoformat(msg_created)
+                                msg_time = datetime.fromisoformat(msg_created_fixed)
                             else:
                                 # 无时区信息，假设为北京时间 (UTC+8)
                                 beijing_tz = timezone(timedelta(hours=8))
-                                msg_time = datetime.fromisoformat(msg_created).replace(tzinfo=beijing_tz)
+                                msg_time = datetime.fromisoformat(msg_created_fixed).replace(tzinfo=beijing_tz)
                             
                             # 统一转换为 UTC 进行比较
                             msg_time_utc = msg_time.astimezone(timezone.utc)
