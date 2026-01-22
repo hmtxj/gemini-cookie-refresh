@@ -491,34 +491,31 @@ def refresh_single_account(account):
                 log("   ✅ 检测到验证码页面")
                 # 成功找到输入框，不再检查错误，直接进行下一步
             else:
-                # 没找到输入框，检查是否遇到错误页面
-                error_elem = page.ele('text:请试试其他方法', timeout=2) or \
-                             page.ele('text:Let\'s try something else', timeout=2)
-                if error_elem:
-                    error_text = error_elem.text.replace('\n', ' ').strip()
-                    log(f"   ⚠️ 遇到服务器错误: {error_text}")
-                    page.get_screenshot(path=f"screenshots/{account_id}_error_{attempt+1}.png")
+                # 没找到输入框，不再瞎猜"服务器错误"，而是直接打印页面状态供调试
+                log(f"   ❌ 未找到验证码输入框")
+                
+                # 打印详细诊断信息
+                try:
+                    title = page.title
+                    url = page.url
+                    # 获取 body 文本，去除多余换行
+                    body_elem = page.ele('tag:body')
+                    body_text = body_elem.text.replace('\n', ' ') if body_elem else "No body element"
+                    if len(body_text) > 100:
+                        body_text = body_text[:100] + "..."
                     
-                    if attempt >= max_retries - 1:
-                        log(f"   ❌ 重试 {max_retries} 次仍失败，跳过此账号")
-                        if page:
-                            page.quit()
-                        return False, None
-                    
-                    # 点击重试按钮
-                    retry_btn = page.ele('text:注册或登录', timeout=2) or \
-                                page.ele('text:Sign up or sign in', timeout=2)
-                    if retry_btn:
-                        retry_btn.click()
-                        time.sleep(2)
-                    continue
+                    log(f"   [诊断] 标题: {title}")
+                    log(f"   [诊断] URL: {url}")
+                    log(f"   [诊断] 页面文本(前100字): {body_text}")
+                except Exception as e:
+                    log(f"   [诊断] 获取页面信息失败: {e}")
 
-                # 既没找到输入框，也没报错，可能是加载太慢或未知状态
+                page.get_screenshot(path=f"screenshots/{account_id}_unknown_fail_{attempt+1}.png")
+
                 if attempt < max_retries - 1:
-                    log(f"   ⚠️ 验证码输入框未出现，重试...")
+                    log(f"   ⚠️ 重试...")
                     continue
                 else:
-                    log(f"   ❌ 验证码输入框始终未出现")
                     if page:
                         page.quit()
                     return False, None
