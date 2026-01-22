@@ -426,17 +426,31 @@ def refresh_single_account(account):
         log("   ❌ 需要安装 DrissionPage: pip install DrissionPage")
         return False, None
     
-    # 配置浏览器（与 Linux 版本一致）
+    # 配置浏览器
     co = ChromiumOptions()
+    
+    # 🔥 检测是否在 GitHub Actions 等 CI 环境中运行
+    is_ci = os.environ.get('CI') or os.environ.get('GITHUB_ACTIONS')
+    if is_ci:
+        log("   检测到 CI 环境，启用 headless 模式")
+        co.set_argument('--headless=new')  # 使用新版 headless 模式
+    
     co.set_argument('--incognito')
     if PROXY_URL:
         log(f"   使用代理: {PROXY_URL}")
         co.set_argument(f'--proxy-server={PROXY_URL}')
+    
+    # 🔥 增强反检测配置
     co.set_user_agent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
     co.set_argument('--disable-blink-features=AutomationControlled')
     co.set_argument('--disable-gpu')
     co.set_argument('--no-sandbox')
     co.set_argument('--disable-dev-shm-usage')
+    co.set_argument('--window-size=1920,1080')
+    co.set_argument('--start-maximized')
+    co.set_argument('--disable-extensions')
+    co.set_argument('--disable-infobars')
+    co.set_argument('--lang=zh-CN')
     co.auto_port()
     
     page = None
