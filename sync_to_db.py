@@ -69,7 +69,7 @@ def trigger_reload(accounts):
             print(f"❌ 登录失败: {login_resp.status_code}", flush=True)
             return False
         
-        log("✅ 登录成功")
+        print("✅ 登录成功", flush=True)
         
         # 构造发送给 API 的数据副本，并将过期时间 +8 小时
         api_accounts = []
